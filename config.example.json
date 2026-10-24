@@ -1,0 +1,25 @@
+{
+  "shop_name": "Сартарошхона",
+  "address": "Манзил: ... (ўзгартиринг)",
+  "timezone": "Asia/Tashkent",
+  "admin_ids": [],
+  "work_start": "09:00",
+  "work_end": "20:00",
+  "days_off": [],
+  "slot_step_minutes": 30,
+  "days_ahead": 7,
+  "reminder_minutes_before": 120,
+  "barbers": [
+    {"id": "b1", "name": "Сартарош 1", "telegram_id": null, "calendar_id": null},
+    {"id": "b2", "name": "Сартарош 2", "telegram_id": null, "calendar_id": null},
+    {"id": "b3", "name": "Сартарош 3", "telegram_id": null, "calendar_id": null},
+    {"id": "b4", "name": "Сартарош 4", "telegram_id": null, "calendar_id": null}
+  ],
+  "services": [
+    {"id": "s1", "name": "Соч олиш", "price": 50000, "minutes": 30},
+    {"id": "s2", "name": "Соқол олиш", "price": 30000, "minutes": 30},
+    {"id": "s3", "name": "Соч + соқол", "price": 70000, "minutes": 60},
+    {"id": "s4", "name": "Болалар соч олиш", "price": 40000, "minutes": 30}
+  ],
+  "google_credentials_file": null
+}
