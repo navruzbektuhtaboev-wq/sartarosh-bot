@@ -4,3 +4,4 @@ __pycache__/
 .env
 config.json
 google-credentials.json
+token.txt

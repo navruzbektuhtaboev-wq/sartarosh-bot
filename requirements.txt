@@ -1,4 +1,4 @@
-aiogram==3.13.1
-# Google Calendar керак бўлса:
-google-api-python-client==2.149.0
-google-auth==2.35.0
+aiogram==3.31.0
+# Google Calendar учун (ихтиёрий):
+google-api-python-client>=2.149
+google-auth>=2.35

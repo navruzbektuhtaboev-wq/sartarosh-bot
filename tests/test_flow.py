@@ -178,6 +178,18 @@ async def run():
     done = [t for t in texts() if "Сиз ёзилдингиз" in t]
     assert done and "сўм" not in done[-1], done
 
+    # /admin: админ йўқ бўлса биринчи ёзган админ бўлади ва файлга сақланади
+    raw["admin_ids"] = []
+    json.dump(raw, open(cfgpath, "w", encoding="utf-8"), ensure_ascii=False)
+    os.environ["BOT_CONFIG"] = cfgpath
+    m.cfg = load_config(cfgpath)
+    await feed(upd_msg("/admin"))
+    assert json.load(open(cfgpath, encoding="utf-8"))["admin_ids"] == [42]
+    USER["id"] = 43
+    await feed(upd_msg("/admin"))
+    assert m.cfg.admin_ids == [42], "иккинчи одам админ бўлолмайди"
+    USER["id"] = 42
+
     shutil.rmtree(tmp)
     print("OK — барча синовлар ўтди")
 

@@ -1,5 +1,6 @@
 import asyncio
 import html
+import json
 import logging
 import os
 from datetime import date, datetime, timedelta
@@ -514,6 +515,23 @@ async def tomorrow_cmd(msg: Message):
     await day_report(msg, 1)
 
 
+@router.message(Command("admin"))
+async def become_admin(msg: Message):
+    """Ҳали админ бўлмаса, /admin ёзган биринчи одам (эгаси) админ бўлади ва config.json га сақланади."""
+    if cfg.admin_ids:
+        if msg.from_user.id in cfg.admin_ids:
+            await msg.answer("Сиз аллақачон админсиз. /bugun ва /ertaga буйруқлари ишлайди.")
+        return
+    cfg.admin_ids.append(msg.from_user.id)
+    path = os.getenv("BOT_CONFIG", "config.json")
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    raw["admin_ids"] = cfg.admin_ids
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False, indent=2)
+    await msg.answer("✅ Сиз админ бўлдингиз. Энди ҳар бир ёзилиш ҳақида хабар оласиз.\n/bugun — бугунги рўйхат, /ertaga — эртанги рўйхат.")
+
+
 @router.message(Command("myid"))
 async def myid(msg: Message):
     await msg.answer(f"Сизнинг Telegram ID: <code>{msg.from_user.id}</code>")
@@ -548,7 +566,7 @@ async def main():
     db = DB(os.getenv("BOT_DB", "bookings.db"))
     cal = Calendar(cfg.google_credentials_file)
 
-    token = os.getenv("BOT_TOKEN")
+    token = (os.getenv("BOT_TOKEN") or "").strip()
     if not token:
         raise SystemExit("BOT_TOKEN берилмаган. @BotFather дан олинг ва BOT_TOKEN=... қилиб беринг.")
 
