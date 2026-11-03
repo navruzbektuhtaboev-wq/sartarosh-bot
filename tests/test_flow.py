@@ -80,6 +80,10 @@ async def run():
     raw["admin_ids"] = [999]
     raw["work_start"], raw["work_end"] = "00:00", "23:59"
     raw["days_off"] = []
+    raw["services"] = [
+        {"id": "s1", "name": "Соч олиш", "price": 50000, "minutes": 30},
+        {"id": "s3", "name": "Соч + соқол", "price": 70000, "minutes": 60},
+    ]
     json.dump(raw, open(cfgpath, "w", encoding="utf-8"), ensure_ascii=False)
     m.cfg = load_config(cfgpath)
     m.db = DB(os.path.join(tmp, "t.db"))
@@ -153,6 +157,26 @@ async def run():
              datetime.combine(d0, datetime.strptime("10:30", "%H:%M").time(), tzinfo=c.tz))]
     got = [f"{s:%H:%M}" for s in free_slots(c, d0, 60, busy, m.now())]
     assert got == ["09:00", "10:30", "11:00"], got
+
+    # Фақат навбат (битта хизмат, нархсиз): хизмат қадами ва нархлар йўқ
+    raw["services"] = [{"id": "s1", "name": "Навбат", "minutes": 30, "price": None}]
+    json.dump(raw, open(cfgpath, "w", encoding="utf-8"), ensure_ascii=False)
+    m.cfg = load_config(cfgpath)
+    sent.clear()
+    await feed(upd_msg("/start"))
+    menu = [b.text for row in sent[-1].reply_markup.keyboard for b in row]
+    assert m.BTN_PRICES not in menu, menu
+    await feed(upd_msg(m.BTN_BOOK)); await feed(upd_cb("b:b4"))
+    assert any(d.startswith("d:") for d in last_kb()), "сартарошдан кейин дарҳол кун"
+    assert "back:barber" in last_kb()
+    day = [d for d in last_kb() if d.startswith("d:")][1]
+    await feed(upd_cb(day)); await feed(upd_cb([d for d in last_kb() if d.startswith("t:")][0]))
+    assert "confirm" in last_kb()
+    conf = [t for t in texts() if "Маълумотларни" in t][-1]
+    assert "Хизмат" not in conf and "сўм" not in conf, conf
+    await feed(upd_cb("confirm"))
+    done = [t for t in texts() if "Сиз ёзилдингиз" in t]
+    assert done and "сўм" not in done[-1], done
 
     shutil.rmtree(tmp)
     print("OK — барча синовлар ўтди")

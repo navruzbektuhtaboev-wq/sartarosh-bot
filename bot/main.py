@@ -54,6 +54,21 @@ def now() -> datetime:
     return datetime.now(cfg.tz)
 
 
+def single_service() -> bool:
+    return len(cfg.services) == 1
+
+
+def show_prices() -> bool:
+    return any(s.price for s in cfg.services.values())
+
+
+def service_line(service) -> str:
+    """Битта хизмат бўлса (фақат навбат) ва нарх бўлмаса, хизмат қатори кўрсатилмайди."""
+    if service is None or single_service():
+        return ""
+    return f"\n✂️ Хизмат: {service.name}" + (f" — {fmt_price(service.price)}" if service.price else "")
+
+
 def fmt_price(p: int) -> str:
     return f"{p:,}".replace(",", " ") + " сўм"
 
@@ -75,17 +90,19 @@ def fmt_booking(b: Booking) -> str:
     t = b.start.astimezone(cfg.tz)
     return (
         f"📅 {fmt_day(t.date())}, {t:%H:%M}\n"
-        f"💇 Сартарош: {barber.name if barber else b.barber_id}\n"
-        f"✂️ Хизмат: {service.name if service else b.service_id}"
-        + (f" — {fmt_price(service.price)}" if service else "")
+        f"💇 Сартарош: {barber.name if barber else b.barber_id}"
+        + service_line(service)
     )
 
 
 def main_menu() -> ReplyKeyboardMarkup:
+    second = [KeyboardButton(text=BTN_MY)]
+    if show_prices():
+        second.append(KeyboardButton(text=BTN_PRICES))
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_BOOK)],
-            [KeyboardButton(text=BTN_MY), KeyboardButton(text=BTN_PRICES)],
+            second,
             [KeyboardButton(text=BTN_ADDRESS)],
         ],
         resize_keyboard=True,
@@ -134,7 +151,7 @@ def barbers_kb():
 
 
 def services_kb():
-    rows = [[(f"{s.name} — {fmt_price(s.price)}", f"s:{s.id}")] for s in cfg.services.values()]
+    rows = [[(s.name + (f" — {fmt_price(s.price)}" if s.price else ""), f"s:{s.id}")] for s in cfg.services.values()]
     rows.append([("⬅️ Орқага", "back:barber"), ("❌ Бекор қилиш", "abort")])
     return ikb(rows)
 
@@ -167,7 +184,10 @@ async def start(msg: Message, state: FSMContext):
 
 @router.message(F.text == BTN_PRICES)
 async def prices(msg: Message):
-    lines = [f"• {s.name} — {fmt_price(s.price)} ({s.minutes} дақ.)" for s in cfg.services.values()]
+    lines = [f"• {s.name} — {fmt_price(s.price)} ({s.minutes} дақ.)" for s in cfg.services.values() if s.price]
+    if not lines:
+        await msg.answer("Нархларни сартарошхонада билишингиз мумкин.")
+        return
     await msg.answer("💈 <b>Нархлар</b>\n\n" + "\n".join(lines))
 
 
@@ -214,6 +234,14 @@ async def pick_barber(cb: CallbackQuery, state: FSMContext):
         await cb.answer("Топилмади", show_alert=True)
         return
     await state.update_data(barber_id=barber_id)
+    if single_service():
+        await state.update_data(service_id=next(iter(cfg.services)))
+        await state.set_state(Booking_.day)
+        await cb.message.edit_text(
+            f"💇 {cfg.barbers[barber_id].name}\n\nКунни танланг:", reply_markup=days_kb("back:barber")
+        )
+        await cb.answer()
+        return
     await state.set_state(Booking_.service)
     await cb.message.edit_text(
         f"💇 {cfg.barbers[barber_id].name}\n\nХизматни танланг:", reply_markup=services_kb()
@@ -311,9 +339,9 @@ async def ask_confirm(msg: Message, state: FSMContext, edit: bool):
     text = (
         "Маълумотларни текширинг:\n\n"
         f"📅 {fmt_day(start.date())}, {start:%H:%M}\n"
-        f"💇 Сартарош: {barber.name}\n"
-        f"✂️ Хизмат: {service.name} — {fmt_price(service.price)}\n"
-        f"📱 Телефон: {data['phone']}"
+        f"💇 Сартарош: {barber.name}"
+        + service_line(service)
+        + f"\n📱 Телефон: {data['phone']}"
     )
     kb = ikb([[("✅ Тасдиқлаш", "confirm")], [("⬅️ Орқага", "back:slot"), ("❌ Бекор қилиш", "abort")]])
     await state.set_state(Booking_.confirm)
@@ -351,7 +379,7 @@ async def confirm(cb: CallbackQuery, state: FSMContext, bot: Bot):
 
     event_id = await cal.add(
         barber.calendar_id,
-        f"{service.name} — {raw_name}",
+        raw_name if single_service() else f"{service.name} — {raw_name}",
         f"Телефон: {data['phone']}\nTelegram: {cb.from_user.id}\nБот орқали ёзилди (№{booking.id})",
         start,
         end,
@@ -390,7 +418,7 @@ async def back(cb: CallbackQuery, state: FSMContext):
         await cb.message.edit_text("Хизматни танланг:", reply_markup=services_kb())
     elif step == "day":
         await state.set_state(Booking_.day)
-        back_to = "abort" if data.get("resched_id") else "back:service"
+        back_to = "abort" if data.get("resched_id") else "back:barber" if single_service() else "back:service"
         await cb.message.edit_text("Кунни танланг:", reply_markup=days_kb(back_to))
     elif step == "slot" and "day" in data:
         await show_slots(cb, state, date.fromisoformat(data["day"]))
@@ -471,7 +499,8 @@ async def day_report(msg: Message, offset: int):
         lines.append(f"\n💇 <b>{cfg.barbers[bid].name}</b>")
         for b in mine:
             s = cfg.services.get(b.service_id)
-            lines.append(f"{b.start.astimezone(cfg.tz):%H:%M} — {s.name if s else ''}, {html.escape(b.client_name)}, {b.phone}")
+            what = "" if single_service() or not s else f"{s.name}, "
+            lines.append(f"{b.start.astimezone(cfg.tz):%H:%M} — {what}{html.escape(b.client_name)}, {b.phone}")
     await msg.answer("\n".join(lines))
 
 

@@ -38,27 +38,9 @@
   "services": [
     {
       "id": "s1",
-      "name": "Соч олиш",
-      "price": 50000,
-      "minutes": 30
-    },
-    {
-      "id": "s2",
-      "name": "Соқол олиш",
-      "price": 30000,
-      "minutes": 30
-    },
-    {
-      "id": "s3",
-      "name": "Соч + соқол",
-      "price": 70000,
-      "minutes": 60
-    },
-    {
-      "id": "s4",
-      "name": "Болалар соч олиш",
-      "price": 40000,
-      "minutes": 30
+      "name": "Навбат",
+      "minutes": 30,
+      "price": null
     }
   ],
   "google_credentials_file": null

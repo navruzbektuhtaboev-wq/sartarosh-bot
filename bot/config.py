@@ -17,8 +17,8 @@ class Barber:
 class Service:
     id: str
     name: str
-    price: int
     minutes: int
+    price: int | None = None
 
 
 @dataclass
