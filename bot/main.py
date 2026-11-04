@@ -641,7 +641,11 @@ async def myid(msg: Message):
 
 @router.message()
 async def fallback(msg: Message):
-    await msg.answer("Менюдан танланг 👇", reply_markup=main_menu())
+    await msg.answer(
+        "Ёзилиш учун пастдаги <b>«✂️ Ёзилиш»</b> тугмасини босинг ва сартарош, кун, вақтни танланг 👇\n"
+        "Ёзма хабарни бот тушунмайди.",
+        reply_markup=main_menu(),
+    )
 
 
 # ---------- эслатмалар ----------
