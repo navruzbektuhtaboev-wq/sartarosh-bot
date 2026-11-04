@@ -56,6 +56,10 @@ def _parse_time(s: str) -> time:
 
 def load_config(path: str | None = None) -> Config:
     path = path or os.getenv("BOT_CONFIG", "config.json")
+    if not os.path.exists(path) and os.path.exists("config.example.json"):
+        # Биринчи ишга тушиш: намунадан нусха. Янгилашда config.json устига ёзилмайди.
+        import shutil
+        shutil.copyfile("config.example.json", path)
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     return Config(
