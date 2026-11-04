@@ -19,6 +19,11 @@ if not exist .venv (
 )
 .venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements.txt
 
+if not exist cloudflared.exe (
+  echo Mini App uchun cloudflared yuklanmoqda...
+  curl -sL -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+)
+
 :loop
 echo Bot ishga tushmoqda...
 .venv\Scripts\python -m bot.main

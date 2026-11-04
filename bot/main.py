@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import sys
 from datetime import date, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, F, Router
@@ -26,6 +27,7 @@ from .config import Config, load_config
 from .db import DB, Booking
 from .gcal import Calendar
 from .slots import available_days, free_slots
+from . import web
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ cfg: Config
 db: DB
 cal: Calendar
 router = Router()
+BOT_TOKEN = ""
 
 
 class Booking_(StatesGroup):
@@ -223,11 +226,16 @@ async def my_bookings(msg: Message):
 # ---------- Mini App ----------
 
 def use_webapp() -> bool:
-    return bool(cfg.webapp_url) and single_service()
+    return bool(cfg.webapp_url or web.live_url) and single_service()
 
 
 async def webapp_payload() -> str:
     """Mini App га бўш вақтлар битмаска қилиб URL орқали берилади: алоҳида сервер керак эмас."""
+    raw = json.dumps(await webapp_data(), ensure_ascii=False, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+async def webapp_data() -> dict:
     service = next(iter(cfg.services.values()))
     grid_start = datetime.combine(date.today(), cfg.work_start)
     grid_end = datetime.combine(date.today(), cfg.work_end)
@@ -250,13 +258,22 @@ async def webapp_payload() -> str:
         "b": [[b.id, b.name] for b in cfg.barbers.values()],
         "d": days,
     }
-    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    return data
 
 
 @router.message(F.text == BTN_BOOK)
 async def book_start(msg: Message, state: FSMContext):
     await state.clear()
+    if web.live_url and single_service():
+        # Компьютердаги сервер интернетга чиққан: саҳифа бўш вақтларни ўзи олади
+        await msg.answer(
+            "Пастдаги тугмани босинг, ёзилиш саҳифаси очилади 👇",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=BTN_WEBAPP, web_app=WebAppInfo(url=web.live_url))],
+                [InlineKeyboardButton(text=BTN_CHAT, callback_data="chatbook")],
+            ]),
+        )
+        return
     if use_webapp():
         url = cfg.webapp_url + ("&" if "?" in cfg.webapp_url else "?") + "d=" + await webapp_payload()
         await msg.answer(
@@ -278,6 +295,12 @@ async def chat_booking(msg: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Booking_.barber)
     await msg.answer("Сартарошни танланг:", reply_markup=barbers_kb())
+
+
+@router.callback_query(F.data == "chatbook")
+async def chat_booking_cb(cb: CallbackQuery, state: FSMContext):
+    await cb.answer()
+    await chat_booking(cb.message, state)
 
 
 @router.message(F.text == BTN_MENU)
@@ -460,53 +483,66 @@ async def confirm(cb: CallbackQuery, state: FSMContext, bot: Bot):
     if "start" not in data:
         await cb.answer("Илтимос, қайтадан бошланг", show_alert=True)
         return
-    barber = cfg.barbers[data["barber_id"]]
-    service = cfg.services[data["service_id"]]
     start = datetime.fromisoformat(data["start"])
-    end = start + timedelta(minutes=service.minutes)
-
-    # Календардаги бандликни ҳам охирги марта текширамиз
-    busy_cal = await barber_busy(barber.id, start.date())
-    if start < now() or any(b0 < end and b1 > start for b0, b1 in busy_cal):
-        await cb.answer("Афсуски, бу вақт банд бўлиб қолди. Бошқа вақтни танланг.", show_alert=True)
-        await show_slots(cb, state, start.date())
-        return
-
-    raw_name = cb.from_user.full_name or "Мижоз"
-    name = html.escape(raw_name)
-    booking = db.create(cb.from_user.id, raw_name, data["phone"], barber.id, service.id, start, end)
+    old_id = data.get("resched_id")
+    booking = await place_booking(
+        bot, cb.from_user.id, cb.from_user.full_name, data["phone"],
+        data["barber_id"], data["service_id"], start, old_id,
+    )
     if not booking:
         await cb.answer("Афсуски, бу вақт банд бўлиб қолди. Бошқа вақтни танланг.", show_alert=True)
         await show_slots(cb, state, start.date())
         return
 
+    await state.clear()
+    await cb.message.edit_text(booked_text(booking))
+    await cb.message.answer("Асосий меню:", reply_markup=main_menu())
+    await cb.answer()
+
+
+def booked_text(booking: Booking) -> str:
+    return (
+        "✅ <b>Сиз ёзилдингиз!</b>\n\n" + fmt_booking(booking) +
+        f"\n\n📍 {cfg.address}\nВақтидан {fmt_minutes(cfg.reminder_minutes)} олдин эслатаман."
+    )
+
+
+async def place_booking(bot: Bot, user_id: int, full_name: str | None, phone: str, barber_id: str,
+                        service_id: str, start: datetime, resched_id: int | None = None) -> Booking | None:
+    """Ёзилишни яратади (чат ва веб учун умумий). Вақт банд бўлса None."""
+    barber = cfg.barbers[barber_id]
+    service = cfg.services[service_id]
+    end = start + timedelta(minutes=service.minutes)
+
+    # Календардаги бандликни ҳам охирги марта текширамиз
+    busy_cal = await barber_busy(barber.id, start.date())
+    if start < now() or any(b0 < end and b1 > start for b0, b1 in busy_cal):
+        return None
+
+    raw_name = full_name or "Мижоз"
+    booking = db.create(user_id, raw_name, phone, barber.id, service.id, start, end)
+    if not booking:
+        return None
+
     event_id = await cal.add(
         barber.calendar_id,
         raw_name if single_service() else f"{service.name} — {raw_name}",
-        f"Телефон: {data['phone']}\nTelegram: {cb.from_user.id}\nБот орқали ёзилди (№{booking.id})",
+        f"Телефон: {phone}\nTelegram: {user_id}\nБот орқали ёзилди (№{booking.id})",
         start,
         end,
     )
     if event_id:
         db.set_event_id(booking.id, event_id)
 
-    old_id = data.get("resched_id")
-    if old_id:
-        old = db.get(old_id)
-        if old and old.status == "active" and old.user_id == cb.from_user.id:
+    if resched_id:
+        old = db.get(resched_id)
+        if old and old.status == "active" and old.user_id == user_id:
             db.cancel(old.id)
             await cal.remove(cfg.barbers[old.barber_id].calendar_id, old.calendar_event_id)
 
-    await state.clear()
-    await cb.message.edit_text(
-        "✅ <b>Сиз ёзилдингиз!</b>\n\n" + fmt_booking(booking) +
-        f"\n\n📍 {cfg.address}\nВақтидан {fmt_minutes(cfg.reminder_minutes)} олдин эслатаман."
-    )
-    await cb.message.answer("Асосий меню:", reply_markup=main_menu())
-    await cb.answer()
-
-    head = "🔁 Ёзилиш вақти ўзгартирилди" if old_id else "🆕 Янги ёзилиш"
-    await notify_staff(bot, barber.id, f"{head} №{booking.id}\n\n{fmt_booking(booking)}\n👤 {name}\n📱 {data['phone']}")
+    head = "🔁 Ёзилиш вақти ўзгартирилди" if resched_id else "🆕 Янги ёзилиш"
+    await notify_staff(bot, barber.id, f"{head} №{booking.id}\n\n{fmt_booking(booking)}\n👤 {html.escape(raw_name)}\n📱 {phone}")
+    return booking
 
 
 @router.callback_query(F.data.startswith("back:"))
@@ -703,7 +739,8 @@ async def main():
     db = DB(os.getenv("BOT_DB", "bookings.db"))
     cal = Calendar(cfg.google_credentials_file)
 
-    token = get_token()
+    global BOT_TOKEN
+    token = BOT_TOKEN = get_token()
 
     from aiogram.client.default import DefaultBotProperties
     from aiogram.exceptions import TelegramUnauthorizedError
@@ -720,6 +757,12 @@ async def main():
     dp = Dispatcher()
     dp.include_router(router)
     asyncio.create_task(reminder_loop(bot))
+    port = int(os.getenv("WEB_PORT", "8080"))
+    try:
+        await web.start_server(sys.modules[__name__], bot, port)
+        asyncio.create_task(web.run_tunnel(bot, port))
+    except OSError:
+        log.exception("Веб-сервер ишга тушмади, Mini App эски усулда ишлайди")
     await dp.start_polling(bot)
 
 

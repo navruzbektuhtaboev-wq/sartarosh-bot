@@ -42,13 +42,23 @@
   .summary { margin: 12px 16px 100px; padding: 14px; border-radius: 12px; background: var(--bg); display: none; }
   .summary b { display: block; font-size: 17px; }
   button, .barber, .day, .time { cursor: pointer; }
+  .phone { display: none; }
+  .phone input { width: 100%; padding: 12px; font-size: 17px; border-radius: 10px; border: 1px solid var(--hint);
+                 background: var(--bg2); color: var(--text); outline: none; }
+  .err { color: #e5484d; font-size: 14px; margin-top: 8px; min-height: 1em; }
+  #done { display: none; padding: 60px 24px; text-align: center; }
+  #done .big { font-size: 56px; }
+  #done h2 { font-size: 20px; text-transform: none; color: var(--text); letter-spacing: 0; margin: 12px 0 6px; }
+  #done p { color: var(--hint); margin: 0 0 24px; }
+  #done button { padding: 12px 28px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-text); font-size: 16px; }
+  #loading { padding: 60px 20px; text-align: center; color: var(--hint); }
   #fallback { display: none; padding: 40px 20px; text-align: center; color: var(--hint); }
   #send { display: none; position: fixed; left: 16px; right: 16px; bottom: 16px; padding: 14px; border: 0; border-radius: 12px;
           background: var(--accent); color: var(--accent-text); font-size: 16px; font-weight: 600; }
 </style>
 </head>
 <body>
-<div id="app">
+<div id="app" style="display:none">
   <header>
     <h1 id="shop">Сартарошхона</h1>
     <p>Сартарош, кун ва вақтни танланг</p>
@@ -56,8 +66,14 @@
   <section><h2>Сартарош</h2><div class="barbers" id="barbers"></div></section>
   <section><h2>Кун</h2><div class="days" id="days"></div></section>
   <section><h2>Бўш вақт</h2><div class="times" id="times"></div></section>
+  <section class="phone" id="phoneBox"><h2>Телефон рақамингиз</h2>
+    <input id="phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" autocomplete="tel">
+    <div class="err" id="err"></div>
+  </section>
   <div class="summary" id="summary"></div>
 </div>
+<div id="loading">Юкланмоқда...</div>
+<div id="done"><div class="big">✅</div><h2>Сиз ёзилдингиз!</h2><p id="doneText"></p><button id="closeBtn">Ёпиш</button></div>
 <div id="fallback">Бу саҳифани Telegram ботидаги «📅 Вақтни танлаш» тугмаси орқали очинг.</div>
 <button id="send">Тасдиқлаш</button>
 
@@ -74,15 +90,35 @@ function decode(s) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-let data;
-try { data = decode(new URLSearchParams(location.search).get("d")); } catch (e) { data = null; }
+let data = null;
+const fromUrl = new URLSearchParams(location.search).get("d");
+const apiMode = !fromUrl && tg && tg.initData;
 
-if (!data) {
-  document.getElementById("app").style.display = "none";
-  document.getElementById("fallback").style.display = "block";
-} else {
-  start();
+function show(id) {
+  ["app", "loading", "done", "fallback"].forEach(x => document.getElementById(x).style.display = x === id ? "block" : "none");
 }
+
+async function api(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify(Object.assign({ initData: tg.initData }, body)) });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+(async () => {
+  try {
+    if (fromUrl) {
+      data = decode(fromUrl);
+    } else if (apiMode) {
+      const res = await api("api/init", {});
+      data = res.data;
+      document.getElementById("phone").value = res.phone || "+998";
+    }
+  } catch (e) { data = null; }
+  if (!data) { show("fallback"); return; }
+  show("app");
+  start();
+})();
 
 function start() {
   if (tg) { tg.ready(); tg.expand(); }
@@ -152,18 +188,51 @@ function start() {
       sum.style.display = "none";
     }
 
-    const payload = ready ? JSON.stringify({ b: data.b[state.b][0], d: data.d[state.d][0], t: state.t.replace(":", "") }) : null;
+    document.getElementById("phoneBox").style.display = ready && apiMode ? "block" : "none";
+    window._choice = ready ? { b: data.b[state.b][0], d: data.d[state.d][0], t: state.t.replace(":", "") } : null;
+    window._label = ready ? `${data.b[state.b][1]}, ${sum.textContent.replace(data.b[state.b][1], "")}` : "";
     if (tg && tg.MainButton && tg.platform !== "unknown") {
       if (ready) { tg.MainButton.setText("Тасдиқлаш — " + state.t); tg.MainButton.show(); } else { tg.MainButton.hide(); }
-      window._payload = payload;
     } else {
       const btn = document.getElementById("send");
       btn.style.display = ready ? "block" : "none";
-      btn.onclick = () => { if (tg) tg.sendData(payload); };
+      btn.onclick = submit;
     }
   }
 
-  if (tg && tg.MainButton) tg.MainButton.onClick(() => { if (window._payload) tg.sendData(window._payload); });
+  async function submit() {
+    const choice = window._choice;
+    if (!choice) return;
+    if (!apiMode) { if (tg) tg.sendData(JSON.stringify(choice)); return; }
+    const err = document.getElementById("err");
+    const phone = document.getElementById("phone").value.replace(/[\s()-]/g, "");
+    if (!/^\+?\d{9,15}$/.test(phone)) {
+      err.textContent = "Телефон рақамни тўғри киритинг, масалан +998901234567";
+      document.getElementById("phone").focus();
+      return;
+    }
+    err.textContent = "";
+    if (tg.MainButton.showProgress) tg.MainButton.showProgress();
+    try {
+      const res = await api("api/book", Object.assign({ phone }, choice));
+      if (res.ok) {
+        tg.MainButton.hide();
+        document.getElementById("doneText").textContent = window._label + ". Тафсилотлар ботда.";
+        show("done");
+        tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+      } else {
+        err.textContent = res.error || "Хатолик";
+        if (res.busy) { const r2 = await api("api/init", {}); data = r2.data; state.t = null; render(); err.textContent = res.error; }
+      }
+    } catch (e) {
+      err.textContent = "Алоқа йўқ. Қайтадан уриниб кўринг.";
+    } finally {
+      if (tg.MainButton.hideProgress) tg.MainButton.hideProgress();
+    }
+  }
+  document.getElementById("closeBtn").onclick = () => tg && tg.close();
+
+  if (tg && tg.MainButton) tg.MainButton.onClick(submit);
   render();
 }
 </script>

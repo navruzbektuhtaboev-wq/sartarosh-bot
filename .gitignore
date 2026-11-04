@@ -5,3 +5,4 @@ __pycache__/
 config.json
 google-credentials.json
 token.txt
+cloudflared.exe

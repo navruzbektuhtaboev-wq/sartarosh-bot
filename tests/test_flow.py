@@ -216,6 +216,16 @@ async def run():
     await feed(upd_msg(m.BTN_CHAT))
     assert "b:b1" in last_kb()
 
+    # Туннел бор бўлса: inline web_app тугмаси ва чатда ёзилиш варианти
+    from bot import web
+    web.live_url = "https://abc.trycloudflare.com/"
+    await feed(upd_msg(m.BTN_BOOK))
+    kb = sent[-1].reply_markup.inline_keyboard
+    assert kb[0][0].web_app.url == web.live_url and kb[1][0].callback_data == "chatbook"
+    await feed(upd_cb("chatbook"))
+    assert "b:b1" in last_kb()
+    web.live_url = None
+
     # /admin: админ йўқ бўлса биринчи ёзган админ бўлади ва файлга сақланади
     raw["admin_ids"] = []
     json.dump(raw, open(cfgpath, "w", encoding="utf-8"), ensure_ascii=False)
