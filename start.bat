@@ -13,23 +13,14 @@ if errorlevel 1 (
   exit /b
 )
 
-if not exist token.txt (
-  echo.
-  echo BotFather bergan tokenni shu yerga qo'ying va Enter bosing:
-  set /p TOKEN=Token: 
-  call echo %%TOKEN%%> token.txt
-)
-
 if not exist .venv (
   echo Birinchi marta o'rnatilmoqda, 1-2 daqiqa kuting...
   python -m venv .venv
 )
 .venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements.txt
 
-set /p BOT_TOKEN=<token.txt
-
 :loop
-echo Bot ishlayapti. Bu oynani yopmang.
+echo Bot ishga tushmoqda...
 .venv\Scripts\python -m bot.main
 echo Bot to'xtadi, 10 soniyadan keyin qayta ishga tushadi...
 timeout /t 10 >nul

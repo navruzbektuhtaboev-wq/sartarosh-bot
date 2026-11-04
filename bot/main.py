@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import os
+import re
 from datetime import date, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, F, Router
@@ -660,6 +661,37 @@ async def reminder_loop(bot: Bot):
         await asyncio.sleep(60)
 
 
+TOKEN_FILE = "token.txt"
+TOKEN_RE = re.compile(r"\d{6,}:[A-Za-z0-9_-]{30,}")
+
+
+def get_token() -> str:
+    """Токенни BOT_TOKEN ёки token.txt дан олади; топилмаса сўрайди ва сақлайди.
+
+    Матндан фақат токенни ажратиб олади, шунинг учун BotFather хабари бутунлай қўйилса ҳам ишлайди.
+    """
+    for raw in (os.getenv("BOT_TOKEN"), _read(TOKEN_FILE)):
+        m = TOKEN_RE.search(raw or "")
+        if m:
+            return m.group(0)
+    while True:
+        print("\nBotFather bergan tokenni shu yerga qo'ying (masalan 7123456789:AAH...) va Enter bosing.")
+        m = TOKEN_RE.search(input("Token: "))
+        if m:
+            with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+                f.write(m.group(0))
+            return m.group(0)
+        print("Bu token emas. BotFather yuborgan uzun kodni to'liq nusxalang.")
+
+
+def _read(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 async def main():
     global cfg, db, cal
     logging.basicConfig(level=logging.INFO)
@@ -667,12 +699,20 @@ async def main():
     db = DB(os.getenv("BOT_DB", "bookings.db"))
     cal = Calendar(cfg.google_credentials_file)
 
-    token = (os.getenv("BOT_TOKEN") or "").strip()
-    if not token:
-        raise SystemExit("BOT_TOKEN берилмаган. @BotFather дан олинг ва BOT_TOKEN=... қилиб беринг.")
+    token = get_token()
 
     from aiogram.client.default import DefaultBotProperties
+    from aiogram.exceptions import TelegramUnauthorizedError
     bot = Bot(token, default=DefaultBotProperties(parse_mode="HTML"))
+    try:
+        me = await bot.get_me()
+    except TelegramUnauthorizedError:
+        print("\nTelegram bu tokenni qabul qilmadi. BotFather'dagi tokenni qaytadan kiriting.\n")
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+        await bot.session.close()
+        return
+    print(f"\nBot ishlayapti: @{me.username}  Bu oynani yopmang.\n")
     dp = Dispatcher()
     dp.include_router(router)
     asyncio.create_task(reminder_loop(bot))
