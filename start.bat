@@ -23,8 +23,8 @@ if not exist token.txt (
 if not exist .venv (
   echo Birinchi marta o'rnatilmoqda, 1-2 daqiqa kuting...
   python -m venv .venv
-  .venv\Scripts\python -m pip install -q -r requirements.txt
 )
+.venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements.txt
 
 set /p BOT_TOKEN=<token.txt
 

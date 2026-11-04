@@ -1,4 +1,5 @@
 aiogram==3.31.0
+tzdata
 # Google Calendar учун (ихтиёрий):
 google-api-python-client>=2.149
 google-auth>=2.35

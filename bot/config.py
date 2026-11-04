@@ -2,7 +2,8 @@ import json
 import os
 from dataclasses import dataclass, field
 from datetime import time
-from zoneinfo import ZoneInfo
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 @dataclass
@@ -39,6 +40,14 @@ class Config:
     webapp_url: str | None = None
 
 
+def _tz(name: str):
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        # Windows'да tzdata бўлмаса: Ўзбекистон доим UTC+5 (ёзги вақт йўқ)
+        return timezone(timedelta(hours=5), name)
+
+
 def _parse_time(s: str) -> time:
     h, m = s.split(":")
     return time(int(h), int(m))
@@ -51,7 +60,7 @@ def load_config(path: str | None = None) -> Config:
     return Config(
         shop_name=raw.get("shop_name", "Сартарошхона"),
         address=raw.get("address", ""),
-        tz=ZoneInfo(raw.get("timezone", "Asia/Tashkent")),
+        tz=_tz(raw.get("timezone", "Asia/Tashkent")),
         admin_ids=[int(x) for x in raw.get("admin_ids", [])],
         work_start=_parse_time(raw.get("work_start", "09:00")),
         work_end=_parse_time(raw.get("work_end", "20:00")),
