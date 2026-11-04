@@ -38,6 +38,7 @@ class Config:
     services: dict[str, Service] = field(default_factory=dict)
     google_credentials_file: str | None = None
     webapp_url: str | None = None
+    group_chat_id: int | None = None
 
 
 def _tz(name: str):
@@ -72,4 +73,5 @@ def load_config(path: str | None = None) -> Config:
         services={s["id"]: Service(**s) for s in raw["services"]},
         google_credentials_file=raw.get("google_credentials_file"),
         webapp_url=raw.get("webapp_url") or None,
+        group_chat_id=raw.get("group_chat_id"),
     )

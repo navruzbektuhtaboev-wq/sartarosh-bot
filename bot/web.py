@@ -39,6 +39,16 @@ def _user(m, init_data: str):
     return parsed.user
 
 
+def _my(m, user_id: int) -> list[dict]:
+    out = []
+    for b in m.db.user_upcoming(user_id, m.now()):
+        t = b.start.astimezone(m.cfg.tz)
+        barber = m.cfg.barbers.get(b.barber_id)
+        out.append({"id": b.id, "barber": barber.name if barber else b.barber_id,
+                    "when": f"{m.fmt_day(t.date())}, {t:%H:%M}"})
+    return out
+
+
 def make_app(m, bot: Bot) -> web.Application:
     async def index(request):
         return web.FileResponse(WEBAPP_DIR / "index.html", headers={"Cache-Control": "no-store"})
@@ -46,7 +56,24 @@ def make_app(m, bot: Bot) -> web.Application:
     async def init(request):
         body = await request.json()
         user = _user(m, body.get("initData", ""))
-        return web.json_response({"data": await m.webapp_data(), "phone": m.db.last_phone(user.id) or ""})
+        return web.json_response({
+            "data": await m.webapp_data(),
+            "phone": m.db.last_phone(user.id) or "",
+            "my": _my(m, user.id),
+        })
+
+    async def cancel(request):
+        body = await request.json()
+        user = _user(m, body.get("initData", ""))
+        b = m.db.get(int(body.get("id", 0)))
+        if not b or b.user_id != user.id or b.status != "active":
+            return web.json_response({"ok": False, "error": "Ёзилиш топилмади"})
+        m.db.cancel(b.id)
+        barber = m.cfg.barbers.get(b.barber_id)
+        await m.cal.remove(barber.calendar_id if barber else None, b.calendar_event_id)
+        await m.notify_staff(bot, b.barber_id,
+                             f"❌ Мижоз бекор қилди №{b.id}\n\n{m.fmt_booking(b)}\n👤 {m.html.escape(b.client_name)}\n📱 {b.phone}")
+        return web.json_response({"ok": True, "my": _my(m, user.id)})
 
     async def book(request):
         body = await request.json()
@@ -76,12 +103,13 @@ def make_app(m, bot: Bot) -> web.Application:
             await bot.send_message(user.id, m.booked_text(booking), reply_markup=m.main_menu())
         except Exception:
             log.warning("Тасдиқ хабари юборилмади: %s", user.id)
-        return web.json_response({"ok": True})
+        return web.json_response({"ok": True, "my": _my(m, user.id)})
 
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_post("/api/init", init)
     app.router.add_post("/api/book", book)
+    app.router.add_post("/api/cancel", cancel)
     return app
 
 

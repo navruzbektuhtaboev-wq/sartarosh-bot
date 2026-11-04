@@ -3,238 +3,423 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Навбатга ёзилиш</title>
+<title>Сартарошхона</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
-    --bg: var(--tg-theme-bg-color, #ffffff);
-    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f5);
-    --text: var(--tg-theme-text-color, #141414);
-    --hint: var(--tg-theme-hint-color, #8a8a8e);
-    --accent: var(--tg-theme-button-color, #2481cc);
-    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --bg: #0e0e10;
+    --card: #19191c;
+    --card2: #232327;
+    --line: #2c2c31;
+    --text: #f3efe8;
+    --hint: #9a968f;
+    --gold: #c9a35a;
+    --gold2: #e2c27f;
+    --on-gold: #1a1408;
+    --red: #e5674d;
+    --top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; background: var(--bg2); color: var(--text);
-         font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 20px 16px 8px; }
-  header h1 { margin: 0; font-size: 22px; }
-  header p { margin: 4px 0 0; color: var(--hint); font-size: 14px; }
-  section { background: var(--bg); margin: 12px 0; padding: 14px 16px; }
-  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--hint); font-weight: 600; }
-  .barbers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .barber { padding: 14px 10px; border-radius: 12px; background: var(--bg2); text-align: center; border: 2px solid transparent; }
-  .barber .avatar { width: 44px; height: 44px; margin: 0 auto 6px; border-radius: 50%; background: var(--accent); color: var(--accent-text);
-                    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; }
-  .barber .name { font-size: 14px; font-weight: 600; }
-  .barber.on { border-color: var(--accent); }
-  .days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
-  .days::-webkit-scrollbar { display: none; }
-  .day { flex: 0 0 auto; min-width: 64px; padding: 8px 10px; border-radius: 12px; background: var(--bg2); text-align: center; border: 2px solid transparent; }
-  .day .wd { font-size: 12px; color: var(--hint); }
-  .day .dn { font-size: 18px; font-weight: 700; }
-  .day.on { border-color: var(--accent); }
-  .day.full { opacity: .4; }
-  .times { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .time { padding: 10px 0; border-radius: 10px; background: var(--bg2); text-align: center; font-weight: 600; border: 2px solid transparent; }
-  .time.on { background: var(--accent); color: var(--accent-text); }
-  .empty { color: var(--hint); font-size: 14px; padding: 6px 0; }
-  .summary { margin: 12px 16px 100px; padding: 14px; border-radius: 12px; background: var(--bg); display: none; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+               font: 16px/1.45 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  .view { display: none; min-height: 100vh; padding-bottom: 110px; }
+  .view.on { display: block; }
+  .wrap { padding: 0 16px; }
+
+  /* Бош саҳифа */
+  .hero { position: relative; padding: calc(var(--top) + 36px) 20px 30px; overflow: hidden;
+          background: radial-gradient(120% 90% at 100% 0%, #3a2d17 0%, rgba(14,14,16,0) 60%),
+                      linear-gradient(180deg, #1b1712 0%, var(--bg) 100%); }
+  .hero::after { content: ""; position: absolute; right: -40px; top: calc(var(--top) + 10px); width: 150px; height: 150px;
+                 border-radius: 50%; border: 1px solid rgba(201,163,90,.25); }
+  .logo { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; font-size: 28px;
+          background: linear-gradient(135deg, var(--gold2), var(--gold)); color: var(--on-gold); margin-bottom: 18px;
+          box-shadow: 0 8px 24px rgba(201,163,90,.25); }
+  .hero h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.01em; }
+  .hero .sub { color: var(--hint); margin: 8px 0 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+          background: rgba(255,255,255,.06); border: 1px solid var(--line); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4fbf74; }
+  .dot.off { background: var(--red); }
+  .cta { width: 100%; padding: 16px; border: 0; border-radius: 14px; font-size: 17px; font-weight: 700;
+         background: linear-gradient(135deg, var(--gold2), var(--gold)); color: var(--on-gold);
+         box-shadow: 0 10px 28px rgba(201,163,90,.22); }
+  .cta:active { transform: scale(.99); }
+
+  h2.sec { margin: 28px 16px 12px; font-size: 20px; letter-spacing: -.01em; }
+  .masters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+  .master { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 12px 14px; text-align: center; }
+  .ava { width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center;
+         font-size: 26px; font-weight: 700; color: var(--gold2);
+         background: radial-gradient(circle at 30% 30%, #2f2a20, #17150f); border: 2px solid var(--gold); }
+  .master .nm { font-weight: 600; font-size: 15px; min-height: 2.6em; display: flex; align-items: center; justify-content: center; }
+  .master .tag { color: var(--gold); font-size: 12px; margin-bottom: 10px; min-height: 1.2em; }
+  .master button { width: 100%; padding: 9px; border-radius: 10px; border: 1px solid var(--gold); background: transparent;
+                   color: var(--gold2); font-size: 14px; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin: 0 16px 10px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--card2); display: grid; place-items: center; font-size: 20px; flex: 0 0 auto; }
+  .row .t { font-weight: 600; }
+  .row .s { color: var(--hint); font-size: 14px; }
+  .link { margin-top: 12px; width: 100%; padding: 11px; border-radius: 10px; border: 1px solid var(--line);
+          background: var(--card2); color: var(--text); font-size: 14px; }
+  .mine { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .mine:first-of-type { border-top: 0; padding-top: 2px; }
+  .mine button { padding: 7px 12px; border-radius: 9px; border: 1px solid #5a2f27; background: transparent; color: var(--red); font-size: 13px; }
+  footer { text-align: center; color: var(--hint); font-size: 12px; padding: 26px 16px 0; }
+
+  /* Ёзилиш саҳифаси */
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+         padding: calc(var(--top) + 12px) 12px 12px; background: rgba(14,14,16,.92); backdrop-filter: blur(10px);
+         border-bottom: 1px solid var(--line); }
+  .bar button { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--card2); color: var(--text); font-size: 18px; }
+  .bar .ttl { font-weight: 700; font-size: 17px; }
+  .step { margin: 20px 16px 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--hint); font-weight: 600; }
+  .pick { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 4px; scrollbar-width: none; }
+  .pick::-webkit-scrollbar { display: none; }
+  .pb { flex: 0 0 auto; padding: 10px 14px; border-radius: 12px; background: var(--card); border: 1.5px solid var(--line); color: var(--text); text-align: center; }
+  .pb.on { border-color: var(--gold); background: #241f15; }
+  .pb.full { opacity: .35; }
+  .pb .a { width: 40px; height: 40px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
+           color: var(--gold2); background: #17150f; border: 1.5px solid var(--gold); }
+  .pb .l1 { font-size: 12px; color: var(--hint); }
+  .pb .l2 { font-size: 18px; font-weight: 700; }
+  .pb .nm { font-size: 13px; font-weight: 600; max-width: 92px; }
+  .times { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 16px; }
+  .tm { padding: 11px 0; border-radius: 10px; background: var(--card); border: 1.5px solid var(--line); text-align: center; font-weight: 600; color: var(--text); }
+  .tm.on { background: linear-gradient(135deg, var(--gold2), var(--gold)); color: var(--on-gold); border-color: var(--gold); }
+  .empty { color: var(--hint); font-size: 14px; padding: 4px 16px; }
+  .phone { padding: 0 16px; }
+  .phone input { width: 100%; padding: 14px; font-size: 17px; border-radius: 12px; border: 1.5px solid var(--line);
+                 background: var(--card); color: var(--text); outline: none; }
+  .phone input:focus { border-color: var(--gold); }
+  .err { color: var(--red); font-size: 14px; margin: 8px 16px 0; min-height: 1em; }
+  .summary { margin: 16px; padding: 14px 16px; border-radius: 14px; background: #241f15; border: 1px solid #4a3c22; display: none; }
   .summary b { display: block; font-size: 17px; }
-  button, .barber, .day, .time { cursor: pointer; }
-  .phone { display: none; }
-  .phone input { width: 100%; padding: 12px; font-size: 17px; border-radius: 10px; border: 1px solid var(--hint);
-                 background: var(--bg2); color: var(--text); outline: none; }
-  .err { color: #e5484d; font-size: 14px; margin-top: 8px; min-height: 1em; }
-  #done { display: none; padding: 60px 24px; text-align: center; }
-  #done .big { font-size: 56px; }
-  #done h2 { font-size: 20px; text-transform: none; color: var(--text); letter-spacing: 0; margin: 12px 0 6px; }
-  #done p { color: var(--hint); margin: 0 0 24px; }
-  #done button { padding: 12px 28px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-text); font-size: 16px; }
-  #loading { padding: 60px 20px; text-align: center; color: var(--hint); }
-  #fallback { display: none; padding: 40px 20px; text-align: center; color: var(--hint); }
-  #send { display: none; position: fixed; left: 16px; right: 16px; bottom: 16px; padding: 14px; border: 0; border-radius: 12px;
-          background: var(--accent); color: var(--accent-text); font-size: 16px; font-weight: 600; }
+  .summary span { color: var(--gold2); }
+  #send { display: none; position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 6; }
+
+  /* Тайёр */
+  .done { text-align: center; padding: calc(var(--top) + 80px) 24px 0; }
+  .done .big { width: 88px; height: 88px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center; font-size: 44px;
+               background: linear-gradient(135deg, var(--gold2), var(--gold)); color: var(--on-gold); }
+  .done h1 { margin: 0 0 8px; font-size: 26px; }
+  .done p { color: var(--hint); margin: 0 0 26px; }
+  .center { text-align: center; color: var(--hint); padding: calc(var(--top) + 120px) 24px; }
 </style>
 </head>
 <body>
-<div id="app" style="display:none">
-  <header>
+
+<div class="view" id="v-loading"><div class="center">Юкланмоқда...</div></div>
+<div class="view" id="v-fallback"><div class="center">Бу саҳифани Telegram'даги <b>@poytug_sartarosh_bot</b> ботидан «Ёзилиш» тугмаси орқали очинг.</div></div>
+
+<!-- Бош саҳифа -->
+<div class="view" id="v-home">
+  <div class="hero">
+    <div class="logo">✂️</div>
     <h1 id="shop">Сартарошхона</h1>
-    <p>Сартарош, кун ва вақтни танланг</p>
-  </header>
-  <section><h2>Сартарош</h2><div class="barbers" id="barbers"></div></section>
-  <section><h2>Кун</h2><div class="days" id="days"></div></section>
-  <section><h2>Бўш вақт</h2><div class="times" id="times"></div></section>
-  <section class="phone" id="phoneBox"><h2>Телефон рақамингиз</h2>
-    <input id="phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" autocomplete="tel">
-    <div class="err" id="err"></div>
-  </section>
+    <div class="sub">Навбатсиз, ўзингизга қулай вақтда</div>
+    <div class="chips">
+      <span class="chip"><span class="dot" id="openDot"></span><span id="openTxt"></span></span>
+      <span class="chip">🕘 <span id="hours"></span></span>
+    </div>
+    <button class="cta" id="ctaBook">Ёзилиш</button>
+  </div>
+
+  <div id="mineBox" style="display:none">
+    <h2 class="sec">Менинг ёзилишларим</h2>
+    <div class="card" id="mineList"></div>
+  </div>
+
+  <h2 class="sec">Усталаримиз</h2>
+  <div class="masters" id="masters"></div>
+
+  <h2 class="sec">Биз ҳақимизда</h2>
+  <div class="card">
+    <div class="row"><div class="ic">🕘</div><div><div class="t">Иш вақти</div><div class="s" id="hours2"></div></div></div>
+  </div>
+  <div class="card">
+    <div class="row"><div class="ic">📍</div><div><div class="t">Манзил</div><div class="s" id="addr"></div></div></div>
+    <button class="link" id="mapBtn">🗺 Харитада очиш</button>
+  </div>
+  <footer>Онлайн ёзилиш · Telegram</footer>
+</div>
+
+<!-- Ёзилиш -->
+<div class="view" id="v-book">
+  <div class="bar"><button id="backBtn">←</button><div class="ttl">Ёзилиш</div></div>
+  <div class="step">1. Уста</div>
+  <div class="pick" id="pBarbers"></div>
+  <div class="step">2. Кун</div>
+  <div class="pick" id="pDays"></div>
+  <div class="step">3. Бўш вақт</div>
+  <div class="times" id="pTimes"></div>
+  <div id="phoneBox" style="display:none">
+    <div class="step">4. Телефон рақамингиз</div>
+    <div class="phone"><input id="phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" autocomplete="tel"></div>
+  </div>
+  <div class="err" id="err"></div>
   <div class="summary" id="summary"></div>
 </div>
-<div id="loading">Юкланмоқда...</div>
-<div id="done"><div class="big">✅</div><h2>Сиз ёзилдингиз!</h2><p id="doneText"></p><button id="closeBtn">Ёпиш</button></div>
-<div id="fallback">Бу саҳифани Telegram ботидаги «📅 Вақтни танлаш» тугмаси орқали очинг.</div>
-<button id="send">Тасдиқлаш</button>
+
+<!-- Тайёр -->
+<div class="view" id="v-done">
+  <div class="done">
+    <div class="big">✓</div>
+    <h1>Сиз ёзилдингиз!</h1>
+    <p id="doneText"></p>
+    <button class="cta" id="doneHome" style="max-width:320px">Бош саҳифа</button>
+  </div>
+</div>
+
+<button class="cta" id="send">Тасдиқлаш</button>
 
 <script>
 const WD = ["Якшанба", "Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба"];
 const WD_SHORT = ["Як", "Ду", "Се", "Чо", "Па", "Жу", "Ша"];
 const MONTHS = ["январ", "феврал", "март", "апрел", "май", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"];
 const tg = window.Telegram && window.Telegram.WebApp;
+const $ = id => document.getElementById(id);
 
 function decode(s) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
-  const bytes = Uint8Array.from(atob(s), c => c.charCodeAt(0));
-  return JSON.parse(new TextDecoder().decode(bytes));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0))));
 }
 
-let data = null;
 const fromUrl = new URLSearchParams(location.search).get("d");
-const apiMode = !fromUrl && tg && tg.initData;
+const apiMode = !fromUrl && !!(tg && tg.initData);
+const hasMainButton = !!(tg && tg.MainButton && tg.platform && tg.platform !== "unknown");
+let data = null, mine = [];
+const state = { b: null, d: null, t: null };
+let view = "loading";
 
-function show(id) {
-  ["app", "loading", "done", "fallback"].forEach(x => document.getElementById(x).style.display = x === id ? "block" : "none");
+function show(v) {
+  view = v;
+  document.querySelectorAll(".view").forEach(e => e.classList.toggle("on", e.id === "v-" + v));
+  window.scrollTo(0, 0);
+  if (tg && tg.BackButton) { v === "book" ? tg.BackButton.show() : tg.BackButton.hide(); }
+  updateConfirm();
 }
 
 async function api(path, body) {
   const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
-                               body: JSON.stringify(Object.assign({ initData: tg.initData }, body)) });
+                               body: JSON.stringify(Object.assign({ initData: tg.initData }, body || {})) });
   if (!r.ok) throw new Error(r.status);
   return r.json();
 }
 
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function initial(name) { return name.replace(/^Катта уста\s*/, "").charAt(0); }
+function haptic() { tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged(); }
+
+// ---------- бош саҳифа ----------
+function tashkentNow() { const d = new Date(); return new Date(d.getTime() + (d.getTimezoneOffset() + 300) * 60000); }
+function renderHome() {
+  document.title = data.n;
+  $("shop").textContent = data.n;
+  const hours = data.h || "";
+  $("hours").textContent = hours;
+  $("hours2").textContent = "Ҳар куни " + hours + (data.o && data.o.length ? " · Дам олиш: " + data.o.join(", ") : "");
+  $("addr").textContent = data.a || "";
+  const [a, b] = hours.split("–").map(x => x.trim());
+  if (a && b) {
+    const n = tashkentNow(), cur = n.getHours() * 60 + n.getMinutes();
+    const toMin = s => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+    const open = cur >= toMin(a) && cur < toMin(b) && !(data.o || []).includes(WD[n.getDay()]);
+    $("openDot").classList.toggle("off", !open);
+    $("openTxt").textContent = open ? "Ҳозир очиқ" : "Ҳозир ёпиқ";
+  }
+  const ms = $("masters"); ms.innerHTML = "";
+  data.b.forEach(([id, name], i) => {
+    const senior = /^Катта уста/.test(name);
+    const card = el("div", "master",
+      `<div class="ava">${esc(initial(name))}</div><div class="nm">${esc(name.replace(/^Катта уста\s*/, ""))}</div>` +
+      `<div class="tag">${senior ? "Катта уста" : "Уста"}</div><button>Ёзилиш</button>`);
+    card.querySelector("button").onclick = () => openBook(i);
+    ms.appendChild(card);
+  });
+  renderMine();
+}
+
+function renderMine() {
+  $("mineBox").style.display = mine.length ? "block" : "none";
+  const box = $("mineList"); box.innerHTML = "";
+  mine.forEach(x => {
+    const r = el("div", "mine", `<div><div class="t" style="font-weight:600">${esc(x.when)}</div><div class="s" style="color:var(--hint);font-size:14px">${esc(x.barber)}</div></div><button>Бекор қилиш</button>`);
+    r.querySelector("button").onclick = async () => {
+      const ok = await new Promise(res => tg && tg.showConfirm ? tg.showConfirm("Ёзилишни бекор қиласизми?", res) : res(confirm("Ёзилишни бекор қиласизми?")));
+      if (!ok) return;
+      try { const res = await api("api/cancel", { id: x.id }); if (res.ok) { mine = res.my; renderMine(); const r2 = await api("api/init"); data = r2.data; } }
+      catch (e) { tg && tg.showAlert && tg.showAlert("Алоқа йўқ, қайтадан уриниб кўринг"); }
+    };
+    box.appendChild(r);
+  });
+}
+
+$("ctaBook").onclick = () => openBook(null);
+$("mapBtn").onclick = () => {
+  const url = "https://yandex.uz/maps/?text=" + encodeURIComponent(data.a || "");
+  tg && tg.openLink ? tg.openLink(url) : window.open(url);
+};
+$("doneHome").onclick = () => show("home");
+$("backBtn").onclick = () => show("home");
+if (tg && tg.BackButton) tg.BackButton.onClick(() => show("home"));
+
+// ---------- ёзилиш ----------
+const [sh, sm] = [0, 0];
+function freeTimes(dayIdx, barberIdx) {
+  const [h0, m0] = data.s.split(":").map(Number), startMin = h0 * 60 + m0;
+  const mask = BigInt("0x" + (data.d[dayIdx][1][barberIdx] || "0"));
+  const out = [];
+  for (let i = 0; i < data.c; i++) {
+    if ((mask >> BigInt(i)) & 1n) {
+      const m = startMin + i * data.p;
+      out.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"));
+    }
+  }
+  return out;
+}
+
+function openBook(barberIdx) {
+  state.b = barberIdx; state.t = null;
+  if (state.d === null) {
+    // биринчи бўш вақти бор кун
+    state.d = 0;
+    if (barberIdx !== null) { const i = data.d.findIndex((_, k) => freeTimes(k, barberIdx).length); state.d = i < 0 ? 0 : i; }
+  }
+  $("err").textContent = "";
+  renderBook();
+  show("book");
+}
+
+function renderBook() {
+  const pb = $("pBarbers"); pb.innerHTML = "";
+  data.b.forEach(([id, name], i) => {
+    const e = el("button", "pb" + (state.b === i ? " on" : ""), `<div class="a">${esc(initial(name))}</div><div class="nm">${esc(name.replace(/^Катта уста\s*/, ""))}</div>`);
+    e.onclick = () => { state.b = i; state.t = null; haptic(); renderBook(); };
+    pb.appendChild(e);
+  });
+
+  const pd = $("pDays"); pd.innerHTML = "";
+  data.d.forEach(([iso], i) => {
+    const dt = new Date(iso + "T00:00:00");
+    const full = state.b !== null && freeTimes(i, state.b).length === 0;
+    const label = i === 0 ? "Бугун" : i === 1 ? "Эртага" : WD_SHORT[dt.getDay()];
+    const e = el("button", "pb" + (state.d === i ? " on" : "") + (full ? " full" : ""), `<div class="l1">${label}</div><div class="l2">${dt.getDate()}</div>`);
+    e.onclick = () => { state.d = i; state.t = null; haptic(); renderBook(); };
+    pd.appendChild(e);
+  });
+
+  const pt = $("pTimes"); pt.innerHTML = "";
+  if (state.b === null) {
+    pt.appendChild(el("div", "empty", "Аввал устани танланг"));
+  } else {
+    const list = freeTimes(state.d, state.b);
+    if (!list.length) pt.appendChild(el("div", "empty", "Бу кунда бўш вақт йўқ, бошқа кунни танланг"));
+    list.forEach(t => {
+      const e = el("button", "tm" + (state.t === t ? " on" : ""), t);
+      e.onclick = () => { state.t = t; haptic(); renderBook(); };
+      pt.appendChild(e);
+    });
+  }
+
+  const ready = state.b !== null && state.t;
+  $("phoneBox").style.display = ready && apiMode ? "block" : "none";
+  const sum = $("summary");
+  if (ready) {
+    const dt = new Date(data.d[state.d][0] + "T00:00:00");
+    sum.innerHTML = `<b></b>${WD[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]} · <span>соат ${state.t}</span>`;
+    sum.querySelector("b").textContent = data.b[state.b][1];
+    sum.style.display = "block";
+  } else {
+    sum.style.display = "none";
+  }
+  updateConfirm();
+}
+
+function choice() {
+  if (view !== "book" || state.b === null || !state.t) return null;
+  return { b: data.b[state.b][0], d: data.d[state.d][0], t: state.t.replace(":", "") };
+}
+
+function updateConfirm() {
+  const c = choice();
+  if (hasMainButton) {
+    if (c) { tg.MainButton.setText("Тасдиқлаш — " + state.t); tg.MainButton.show(); } else { tg.MainButton.hide(); }
+  } else {
+    $("send").style.display = c ? "block" : "none";
+  }
+}
+
+async function submit() {
+  const c = choice();
+  if (!c) return;
+  if (!apiMode) { if (tg && tg.sendData) tg.sendData(JSON.stringify(c)); return; }
+  const err = $("err");
+  const phone = $("phone").value.replace(/[\s()-]/g, "");
+  if (!/^\+?\d{9,15}$/.test(phone)) {
+    err.textContent = "Телефон рақамни тўғри киритинг, масалан +998901234567";
+    $("phone").focus();
+    return;
+  }
+  err.textContent = "";
+  tg.MainButton && tg.MainButton.showProgress && tg.MainButton.showProgress();
+  try {
+    const res = await api("api/book", Object.assign({ phone }, c));
+    if (res.ok) {
+      mine = res.my || mine;
+      const dt = new Date(c.d + "T00:00:00");
+      $("doneText").textContent = `${data.b[state.b][1]} · ${WD[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]}, соат ${state.t}. Вақтидан олдин ботда эслатаман.`;
+      tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+      const r2 = await api("api/init"); data = r2.data; mine = r2.my; renderHome();
+      state.t = null;
+      show("done");
+    } else {
+      err.textContent = res.error || "Хатолик";
+      if (res.busy) { const r2 = await api("api/init"); data = r2.data; state.t = null; renderBook(); err.textContent = res.error; }
+    }
+  } catch (e) {
+    err.textContent = "Алоқа йўқ. Қайтадан уриниб кўринг.";
+  } finally {
+    tg.MainButton && tg.MainButton.hideProgress && tg.MainButton.hideProgress();
+  }
+}
+if (hasMainButton) tg.MainButton.onClick(submit);
+$("send").onclick = submit;
+
+// ---------- ишга тушириш ----------
 (async () => {
+  show("loading");
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    try { tg.setHeaderColor("#0e0e10"); tg.setBackgroundColor("#0e0e10"); tg.setBottomBarColor && tg.setBottomBarColor("#0e0e10"); } catch (e) {}
+    if (["android", "ios"].includes(tg.platform) && tg.requestFullscreen && tg.isVersionAtLeast && tg.isVersionAtLeast("8.0")) {
+      try { tg.requestFullscreen(); } catch (e) {}
+    }
+    if (hasMainButton && tg.MainButton.setParams) {
+      tg.MainButton.setParams({ color: "#c9a35a", text_color: "#1a1408" });
+    }
+  }
   try {
     if (fromUrl) {
       data = decode(fromUrl);
     } else if (apiMode) {
-      const res = await api("api/init", {});
-      data = res.data;
-      document.getElementById("phone").value = res.phone || "+998";
+      const res = await api("api/init");
+      data = res.data; mine = res.my || [];
+      $("phone").value = res.phone || "+998";
     }
   } catch (e) { data = null; }
   if (!data) { show("fallback"); return; }
-  show("app");
-  start();
+  renderHome();
+  // Эски усулда (чатдаги тугмадан) очилса, тўғридан-тўғри ёзилиш саҳифаси
+  if (fromUrl) openBook(null); else show("home");
 })();
-
-function start() {
-  if (tg) { tg.ready(); tg.expand(); }
-  document.getElementById("shop").textContent = data.n;
-  const [sh, sm] = data.s.split(":").map(Number);
-  const startMin = sh * 60 + sm;
-  const state = { b: null, d: null, t: null };
-
-  // Ҳар бир кун учун ҳар сартарошнинг бўш вақтлари (битмаска → "HH:MM" рўйхати)
-  function freeTimes(dayIdx, barberIdx) {
-    const mask = BigInt("0x" + data.d[dayIdx][1][barberIdx]);
-    const out = [];
-    for (let i = 0; i < data.c; i++) {
-      if ((mask >> BigInt(i)) & 1n) {
-        const m = startMin + i * data.p;
-        out.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"));
-      }
-    }
-    return out;
-  }
-
-  function el(tag, cls, html) { const e = document.createElement(tag); e.className = cls; e.innerHTML = html; return e; }
-  function haptic() { tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged(); }
-
-  function render() {
-    const bw = document.getElementById("barbers"); bw.innerHTML = "";
-    data.b.forEach(([id, name], i) => {
-      const e = el("div", "barber" + (state.b === i ? " on" : ""),
-        `<div class="avatar">${name.replace(/^Катта уста\s*/, "").charAt(0)}</div><div class="name"></div>`);
-      e.querySelector(".name").textContent = name;
-      e.onclick = () => { state.b = i; state.t = null; haptic(); render(); };
-      bw.appendChild(e);
-    });
-
-    const dw = document.getElementById("days"); dw.innerHTML = "";
-    data.d.forEach(([iso], i) => {
-      const dt = new Date(iso + "T00:00:00");
-      const full = state.b !== null && freeTimes(i, state.b).length === 0;
-      const label = i === 0 ? "Бугун" : i === 1 ? "Эртага" : WD_SHORT[dt.getDay()];
-      const e = el("div", "day" + (state.d === i ? " on" : "") + (full ? " full" : ""),
-        `<div class="wd">${label}</div><div class="dn">${dt.getDate()}</div>`);
-      e.onclick = () => { state.d = i; state.t = null; haptic(); render(); };
-      dw.appendChild(e);
-    });
-
-    const tw = document.getElementById("times"); tw.innerHTML = "";
-    if (state.b === null || state.d === null) {
-      tw.appendChild(el("div", "empty", "Аввал сартарош ва кунни танланг"));
-    } else {
-      const list = freeTimes(state.d, state.b);
-      if (!list.length) tw.appendChild(el("div", "empty", "Бу кунда бўш вақт йўқ, бошқа кунни танланг"));
-      list.forEach(t => {
-        const e = el("div", "time" + (state.t === t ? " on" : ""), t);
-        e.onclick = () => { state.t = t; haptic(); render(); };
-        tw.appendChild(e);
-      });
-    }
-
-    const sum = document.getElementById("summary");
-    const ready = state.b !== null && state.d !== null && state.t;
-    if (ready) {
-      const dt = new Date(data.d[state.d][0] + "T00:00:00");
-      sum.innerHTML = `<b></b>${WD[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]}, соат ${state.t}`;
-      sum.querySelector("b").textContent = data.b[state.b][1];
-      sum.style.display = "block";
-    } else {
-      sum.style.display = "none";
-    }
-
-    document.getElementById("phoneBox").style.display = ready && apiMode ? "block" : "none";
-    window._choice = ready ? { b: data.b[state.b][0], d: data.d[state.d][0], t: state.t.replace(":", "") } : null;
-    window._label = ready ? `${data.b[state.b][1]}, ${sum.textContent.replace(data.b[state.b][1], "")}` : "";
-    if (tg && tg.MainButton && tg.platform !== "unknown") {
-      if (ready) { tg.MainButton.setText("Тасдиқлаш — " + state.t); tg.MainButton.show(); } else { tg.MainButton.hide(); }
-    } else {
-      const btn = document.getElementById("send");
-      btn.style.display = ready ? "block" : "none";
-      btn.onclick = submit;
-    }
-  }
-
-  async function submit() {
-    const choice = window._choice;
-    if (!choice) return;
-    if (!apiMode) { if (tg) tg.sendData(JSON.stringify(choice)); return; }
-    const err = document.getElementById("err");
-    const phone = document.getElementById("phone").value.replace(/[\s()-]/g, "");
-    if (!/^\+?\d{9,15}$/.test(phone)) {
-      err.textContent = "Телефон рақамни тўғри киритинг, масалан +998901234567";
-      document.getElementById("phone").focus();
-      return;
-    }
-    err.textContent = "";
-    if (tg.MainButton.showProgress) tg.MainButton.showProgress();
-    try {
-      const res = await api("api/book", Object.assign({ phone }, choice));
-      if (res.ok) {
-        tg.MainButton.hide();
-        document.getElementById("doneText").textContent = window._label + ". Тафсилотлар ботда.";
-        show("done");
-        tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
-      } else {
-        err.textContent = res.error || "Хатолик";
-        if (res.busy) { const r2 = await api("api/init", {}); data = r2.data; state.t = null; render(); err.textContent = res.error; }
-      }
-    } catch (e) {
-      err.textContent = "Алоқа йўқ. Қайтадан уриниб кўринг.";
-    } finally {
-      if (tg.MainButton.hideProgress) tg.MainButton.hideProgress();
-    }
-  }
-  document.getElementById("closeBtn").onclick = () => tg && tg.close();
-
-  if (tg && tg.MainButton) tg.MainButton.onClick(submit);
-  render();
-}
 </script>
 </body>
 </html>

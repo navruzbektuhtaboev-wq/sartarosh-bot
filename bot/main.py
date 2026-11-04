@@ -131,6 +131,8 @@ def chunks(items, n):
 
 async def notify_staff(bot: Bot, barber_id: str, text: str):
     targets = set(cfg.admin_ids)
+    if cfg.group_chat_id:
+        targets.add(int(cfg.group_chat_id))
     barber = cfg.barbers.get(barber_id)
     if barber and barber.telegram_id:
         targets.add(int(barber.telegram_id))
@@ -257,6 +259,9 @@ async def webapp_data() -> dict:
         "c": count,
         "b": [[b.id, b.name] for b in cfg.barbers.values()],
         "d": days,
+        "a": cfg.address,
+        "h": f"{cfg.work_start:%H:%M} – {cfg.work_end:%H:%M}",
+        "o": [WEEKDAYS[d] for d in cfg.days_off],
     }
     return data
 
@@ -621,7 +626,7 @@ def staff_barber_ids(user_id: int) -> list[str] | None:
 
 
 async def day_report(msg: Message, offset: int):
-    ids = staff_barber_ids(msg.from_user.id)
+    ids = list(cfg.barbers) if cfg.group_chat_id and msg.chat.id == cfg.group_chat_id else staff_barber_ids(msg.from_user.id)
     if ids is None:
         return
     d = now().date() + timedelta(days=offset)
@@ -653,6 +658,103 @@ async def tomorrow_cmd(msg: Message):
     await day_report(msg, 1)
 
 
+def save_config(**changes):
+    """config.json даги айрим майдонларни ўзгартириб сақлайди."""
+    path = os.getenv("BOT_CONFIG", "config.json")
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    for key, value in changes.items():
+        if key == "barber_telegram":
+            bid, tid = value
+            for b in raw["barbers"]:
+                if b["id"] == bid:
+                    b["telegram_id"] = tid
+        else:
+            raw[key] = value
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False, indent=2)
+
+
+@router.message(Command("guruh"))
+async def set_group(msg: Message):
+    """Админ гуруҳда /guruh ёзса, барча ёзилишлар шу гуруҳга ҳам юборилади."""
+    if msg.chat.type not in ("group", "supergroup"):
+        await msg.answer("Бу буйруқни усталар билан очилган <b>гуруҳ</b> ичида ёзинг.")
+        return
+    if msg.from_user.id not in cfg.admin_ids:
+        await msg.answer("Бу буйруқни фақат админ ёза олади.")
+        return
+    cfg.group_chat_id = msg.chat.id
+    save_config(group_chat_id=msg.chat.id)
+    await msg.answer(
+        "✅ Гуруҳ уланди. Энди ҳар бир янги ёзилиш ва бекор қилиш шу ерга келади.\n"
+        "/bugun — бугунги рўйхат, /ertaga — эртанги рўйхат.\n\n"
+        "Ҳар бир уста ботга шахсий ёзиб /usta буйруғи орқали ўзини танласа, ўзига ҳам алоҳида хабар олади."
+    )
+
+
+@router.message(Command("usta"))
+async def barber_link_start(msg: Message):
+    if msg.chat.type != "private":
+        await msg.answer("Бу буйруқни ботнинг ўзига шахсий ёзинг.")
+        return
+    rows = [[(f"💇 {b.name}", f"usta:{b.id}")] for b in cfg.barbers.values()]
+    await msg.answer("Сиз қайси устасиз? Исмингизни танланг:", reply_markup=ikb(rows))
+
+
+@router.callback_query(F.data.startswith("usta:"))
+async def barber_link_pick(cb: CallbackQuery, bot: Bot):
+    bid = cb.data.split(":", 1)[1]
+    if bid not in cfg.barbers:
+        await cb.answer("Топилмади", show_alert=True)
+        return
+    who = html.escape(cb.from_user.full_name or str(cb.from_user.id))
+    if not cfg.admin_ids:
+        await cb.answer("Аввал сартарошхона эгаси /admin ёзиши керак", show_alert=True)
+        return
+    for admin in cfg.admin_ids:
+        try:
+            await bot.send_message(
+                admin,
+                f"👤 {who} ўзини <b>{html.escape(cfg.barbers[bid].name)}</b> деб кўрсатди. Тасдиқлайсизми?",
+                reply_markup=ikb([[("✅ Ҳа", f"ustaok:{bid}:{cb.from_user.id}"), ("❌ Йўқ", f"ustano:{cb.from_user.id}")]]),
+            )
+        except Exception:
+            log.warning("Админга юборилмади: %s", admin)
+    await cb.message.edit_text("Сўровингиз сартарошхона эгасига юборилди. Тасдиқлангач хабар келади.")
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("ustaok:"))
+async def barber_link_ok(cb: CallbackQuery, bot: Bot):
+    if cb.from_user.id not in cfg.admin_ids:
+        await cb.answer("Фақат админ", show_alert=True)
+        return
+    _, bid, tid = cb.data.split(":")
+    cfg.barbers[bid].telegram_id = int(tid)
+    save_config(barber_telegram=(bid, int(tid)))
+    await cb.message.edit_text(f"✅ {html.escape(cfg.barbers[bid].name)} уланди.")
+    await cb.answer()
+    try:
+        await bot.send_message(int(tid), f"✅ Сиз <b>{html.escape(cfg.barbers[bid].name)}</b> сифатида уландингиз. "
+                                         "Сизга ёзилган мижозлар ҳақида шу ерга хабар келади.\n/bugun, /ertaga — рўйхат.")
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("ustano:"))
+async def barber_link_no(cb: CallbackQuery, bot: Bot):
+    if cb.from_user.id not in cfg.admin_ids:
+        await cb.answer("Фақат админ", show_alert=True)
+        return
+    await cb.message.edit_text("❌ Рад этилди.")
+    await cb.answer()
+    try:
+        await bot.send_message(int(cb.data.split(":")[1]), "Сўровингиз рад этилди.")
+    except Exception:
+        pass
+
+
 @router.message(Command("admin"))
 async def become_admin(msg: Message):
     """Ҳали админ бўлмаса, /admin ёзган биринчи одам (эгаси) админ бўлади ва config.json га сақланади."""
@@ -661,12 +763,7 @@ async def become_admin(msg: Message):
             await msg.answer("Сиз аллақачон админсиз. /bugun ва /ertaga буйруқлари ишлайди.")
         return
     cfg.admin_ids.append(msg.from_user.id)
-    path = os.getenv("BOT_CONFIG", "config.json")
-    with open(path, encoding="utf-8") as f:
-        raw = json.load(f)
-    raw["admin_ids"] = cfg.admin_ids
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(raw, f, ensure_ascii=False, indent=2)
+    save_config(admin_ids=cfg.admin_ids)
     await msg.answer("✅ Сиз админ бўлдингиз. Энди ҳар бир ёзилиш ҳақида хабар оласиз.\n/bugun — бугунги рўйхат, /ertaga — эртанги рўйхат.")
 
 
@@ -677,6 +774,8 @@ async def myid(msg: Message):
 
 @router.message()
 async def fallback(msg: Message):
+    if msg.chat.type != "private":
+        return
     await msg.answer(
         "Ёзилиш учун пастдаги <b>«✂️ Ёзилиш»</b> тугмасини босинг ва сартарош, кун, вақтни танланг 👇\n"
         "Ёзма хабарни бот тушунмайди.",

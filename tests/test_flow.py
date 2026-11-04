@@ -53,6 +53,14 @@ def upd_msg(text=None, contact=None):
     return Update.model_validate({"update_id": uid, "message": msg})
 
 
+def upd_group(text, chat_id=-100555):
+    global uid
+    uid += 1
+    return Update.model_validate({"update_id": uid, "message": {
+        "message_id": uid, "date": int(datetime.now().timestamp()),
+        "chat": {"id": chat_id, "type": "supergroup", "title": "Усталар"}, "from": USER, "text": text}})
+
+
 def upd_webapp(data):
     global uid
     uid += 1
@@ -237,6 +245,30 @@ async def run():
     await feed(upd_msg("/admin"))
     assert m.cfg.admin_ids == [42], "иккинчи одам админ бўлолмайди"
     USER["id"] = 42
+
+    # Гуруҳ: админ /guruh ёзади, ёзилишлар гуруҳга ҳам боради; оддий хабарга жавоб бермайди
+    sent.clear()
+    await feed(upd_group("салом"))
+    assert not sent, "гуруҳда ортиқча жавоб"
+    await feed(upd_group("/guruh"))
+    assert json.load(open(cfgpath, encoding="utf-8"))["group_chat_id"] == -100555
+    soon2 = m.now() + timedelta(days=1)
+    soon2 = soon2.replace(hour=12, minute=0, second=0, microsecond=0)
+    bk2 = await m.place_booking(bot, 77, "Гуруҳ синов", "+998900000000", "b2", "s1", soon2)
+    assert bk2 and any(isinstance(x, SendMessage) and x.chat_id == -100555 and "Янги ёзилиш" in x.text for x in sent)
+
+    # Уста ўзини улайди: /usta → танлайди → админ тасдиқлайди
+    USER["id"] = 500
+    await feed(upd_msg("/usta"))
+    assert "usta:b3" in last_kb()
+    await feed(upd_cb("usta:b3"))
+    assert "ustaok:b3:500" in last_kb()
+    await feed(upd_cb("ustaok:b3:500"))
+    assert m.cfg.barbers["b3"].telegram_id is None, "админ бўлмаган тасдиқлай олмайди"
+    USER["id"] = 42
+    await feed(upd_cb("ustaok:b3:500"))
+    assert m.cfg.barbers["b3"].telegram_id == 500
+    assert [b for b in json.load(open(cfgpath, encoding="utf-8"))["barbers"] if b["id"] == "b3"][0]["telegram_id"] == 500
 
     shutil.rmtree(tmp)
     print("OK — барча синовлар ўтди")
