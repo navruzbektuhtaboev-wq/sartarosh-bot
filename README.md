@@ -47,6 +47,15 @@ docker run -d --restart=always -e BOT_TOKEN=123456:ABC... -v $PWD/data:/data bar
 
 Бот доим ишлаши учун уни сервер/VPS да (ёки Railway, Render каби хизматда) ишга туширинг. Ёзилишлар `bookings.db` файлида сақланади.
 
+## Mini App (Telegram ичида сайт кўринишида ёзилиш)
+
+`webapp/index.html` — алоҳида сервер талаб қилмайдиган статик саҳифа. Бот «✂️ Ёзилиш» босилганда бўш вақтларни саҳифа ҳаволасига жойлаб юборади, мижоз танлагач саҳифа танловни ботга қайтаради ва бот уни текшириб, ёзиб қўяди.
+
+1. `webapp/` ни HTTPS сайтга жойланг (масалан GitHub Pages: репо → Settings → Pages → `main` branch).
+2. `config.json` га `"webapp_url": "https://<логин>.github.io/<репо>/webapp/"` ёзинг ва ботни қайта ишга туширинг.
+
+`webapp_url` бўлмаса, бот олдингидек чат тугмалари орқали ишлайди.
+
 ## Google Calendar улаш (ихтиёрий)
 
 1. [Google Cloud Console](https://console.cloud.google.com/) да лойиҳа очинг, **Google Calendar API** ни ёқинг.

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import html
 import json
 import logging
@@ -17,6 +18,7 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
+    WebAppInfo,
 )
 
 from .config import Config, load_config
@@ -33,6 +35,9 @@ BTN_BOOK = "✂️ Ёзилиш"
 BTN_MY = "📋 Ёзилишларим"
 BTN_PRICES = "💈 Нархлар"
 BTN_ADDRESS = "📍 Манзил"
+BTN_WEBAPP = "📅 Вақтни танлаш"
+BTN_CHAT = "💬 Чатда ёзилиш"
+BTN_MENU = "⬅️ Меню"
 
 cfg: Config
 db: DB
@@ -214,11 +219,107 @@ async def my_bookings(msg: Message):
 
 # ---------- ёзилиш жараёни ----------
 
+# ---------- Mini App ----------
+
+def use_webapp() -> bool:
+    return bool(cfg.webapp_url) and single_service()
+
+
+async def webapp_payload() -> str:
+    """Mini App га бўш вақтлар битмаска қилиб URL орқали берилади: алоҳида сервер керак эмас."""
+    service = next(iter(cfg.services.values()))
+    grid_start = datetime.combine(date.today(), cfg.work_start)
+    grid_end = datetime.combine(date.today(), cfg.work_end)
+    count = int((grid_end - grid_start).total_seconds() // 60 // cfg.slot_step)
+    days = []
+    for d in available_days(cfg, now()):
+        masks = []
+        for bid in cfg.barbers:
+            mask = 0
+            for s in free_slots(cfg, d, service.minutes, await barber_busy(bid, d), now()):
+                idx = ((s.hour * 60 + s.minute) - (cfg.work_start.hour * 60 + cfg.work_start.minute)) // cfg.slot_step
+                mask |= 1 << idx
+            masks.append(format(mask, "x"))
+        days.append([d.isoformat(), masks])
+    data = {
+        "n": cfg.shop_name,
+        "s": f"{cfg.work_start:%H:%M}",
+        "p": cfg.slot_step,
+        "c": count,
+        "b": [[b.id, b.name] for b in cfg.barbers.values()],
+        "d": days,
+    }
+    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
 @router.message(F.text == BTN_BOOK)
 async def book_start(msg: Message, state: FSMContext):
     await state.clear()
+    if use_webapp():
+        url = cfg.webapp_url + ("&" if "?" in cfg.webapp_url else "?") + "d=" + await webapp_payload()
+        await msg.answer(
+            "Пастдаги <b>«📅 Вақтни танлаш»</b> тугмасини босинг 👇",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[
+                    [KeyboardButton(text=BTN_WEBAPP, web_app=WebAppInfo(url=url))],
+                    [KeyboardButton(text=BTN_CHAT), KeyboardButton(text=BTN_MENU)],
+                ],
+                resize_keyboard=True,
+            ),
+        )
+        return
+    await chat_booking(msg, state)
+
+
+@router.message(F.text == BTN_CHAT)
+async def chat_booking(msg: Message, state: FSMContext):
+    await state.clear()
     await state.set_state(Booking_.barber)
     await msg.answer("Сартарошни танланг:", reply_markup=barbers_kb())
+
+
+@router.message(F.text == BTN_MENU)
+async def back_to_menu(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer("Асосий меню:", reply_markup=main_menu())
+
+
+@router.message(F.web_app_data)
+async def webapp_booking(msg: Message, state: FSMContext):
+    try:
+        got = json.loads(msg.web_app_data.data)
+        barber_id, day, hhmm = got["b"], date.fromisoformat(got["d"]), str(got["t"])
+        start = datetime(day.year, day.month, day.day, int(hhmm[:2]), int(hhmm[2:]), tzinfo=cfg.tz)
+    except Exception:
+        await msg.answer("Хатолик юз берди, қайтадан уриниб кўринг.", reply_markup=main_menu())
+        return
+    service = next(iter(cfg.services.values()))
+    if barber_id not in cfg.barbers or day not in available_days(cfg, now()):
+        await msg.answer("Хатолик юз берди, қайтадан уриниб кўринг.", reply_markup=main_menu())
+        return
+    if start not in free_slots(cfg, day, service.minutes, await barber_busy(barber_id, day), now()):
+        await msg.answer("Афсуски, бу вақт банд бўлиб қолди. «✂️ Ёзилиш» ни босиб, бошқа вақтни танланг.",
+                         reply_markup=main_menu())
+        return
+    await state.clear()
+    await state.update_data(barber_id=barber_id, service_id=service.id, day=day.isoformat(), start=start.isoformat())
+    phone = db.last_phone(msg.from_user.id)
+    if phone:
+        await state.update_data(phone=phone)
+        await msg.answer("Деярли тайёр!", reply_markup=main_menu())
+        await ask_confirm(msg, state, edit=False)
+    else:
+        await state.set_state(Booking_.phone)
+        await msg.answer(
+            f"🕘 {fmt_day(day)}, {start:%H:%M}\n\n"
+            "Телефон рақамингизни юборинг (тугмани босинг ёки ёзинг, масалан +998901234567):",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="📱 Рақамни юбориш", request_contact=True)]],
+                resize_keyboard=True,
+                one_time_keyboard=True,
+            ),
+        )
 
 
 @router.callback_query(F.data == "abort")

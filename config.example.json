@@ -43,5 +43,6 @@
       "price": null
     }
   ],
-  "google_credentials_file": null
+  "google_credentials_file": null,
+  "webapp_url": null
 }

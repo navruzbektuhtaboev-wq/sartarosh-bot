@@ -53,6 +53,14 @@ def upd_msg(text=None, contact=None):
     return Update.model_validate({"update_id": uid, "message": msg})
 
 
+def upd_webapp(data):
+    global uid
+    uid += 1
+    return Update.model_validate({"update_id": uid, "message": {
+        "message_id": uid, "date": int(datetime.now().timestamp()), "chat": {"id": 42, "type": "private"}, "from": USER,
+        "web_app_data": {"data": data, "button_text": "📅 Вақтни танлаш"}}})
+
+
 def upd_cb(data):
     global uid
     uid += 1
@@ -177,6 +185,36 @@ async def run():
     await feed(upd_cb("confirm"))
     done = [t for t in texts() if "Сиз ёзилдингиз" in t]
     assert done and "сўм" not in done[-1], done
+
+    # Mini App: URL ичидаги бўш вақтлар ва web_app_data орқали ёзилиш
+    import base64
+    raw["webapp_url"] = "https://example.github.io/sartarosh-bot/webapp/"
+    json.dump(raw, open(cfgpath, "w", encoding="utf-8"), ensure_ascii=False)
+    m.cfg = load_config(cfgpath)
+    sent.clear()
+    await feed(upd_msg(m.BTN_BOOK))
+    btn = sent[-1].reply_markup.keyboard[0][0]
+    assert btn.web_app and btn.web_app.url.startswith(raw["webapp_url"] + "?d="), btn
+    enc = btn.web_app.url.split("?d=")[1]
+    payload = json.loads(base64.urlsafe_b64decode(enc + "=" * (-len(enc) % 4)))
+    assert [b[1] for b in payload["b"]][0] == "Катта уста Икромжон"
+    assert len(btn.web_app.url) < 4000, len(btn.web_app.url)
+    day_iso, masks = payload["d"][1]
+    mask = int(masks[1], 16)
+    idx = (mask & -mask).bit_length() - 1
+    h, mi = divmod(int(payload["s"][:2]) * 60 + int(payload["s"][3:]) + idx * payload["p"], 60)
+    await feed(upd_webapp(json.dumps({"b": payload["b"][1][0], "d": day_iso, "t": f"{h:02d}{mi:02d}"})))
+    assert "confirm" in last_kb(), texts()[-3:]
+    await feed(upd_cb("confirm"))
+    ok = [b for b in m.db.user_upcoming(42, m.now()) if b.barber_id == payload["b"][1][0]]
+    assert ok and f"{ok[0].start:%H%M}" == f"{h:02d}{mi:02d}", ok
+    # Энди шу вақт банд: такрор юборилса рад этилади
+    await feed(upd_webapp(json.dumps({"b": payload["b"][1][0], "d": day_iso, "t": f"{h:02d}{mi:02d}"})))
+    assert "банд" in texts()[-1]
+    await feed(upd_webapp("бузуқ"))
+    assert "Хатолик" in texts()[-1]
+    await feed(upd_msg(m.BTN_CHAT))
+    assert "b:b1" in last_kb()
 
     # /admin: админ йўқ бўлса биринчи ёзган админ бўлади ва файлга сақланади
     raw["admin_ids"] = []
