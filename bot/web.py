@@ -45,7 +45,7 @@ def _my(m, user_id: int) -> list[dict]:
         t = b.start.astimezone(m.cfg.tz)
         barber = m.cfg.barbers.get(b.barber_id)
         out.append({"id": b.id, "barber": barber.name if barber else b.barber_id,
-                    "when": f"{m.fmt_day(t.date())}, {t:%H:%M}"})
+                    "when": f"{m.fmt_day(t.date())}, {t:%H:%M}", "pending": b.status == "pending"})
     return out
 
 
@@ -66,7 +66,7 @@ def make_app(m, bot: Bot) -> web.Application:
         body = await request.json()
         user = _user(m, body.get("initData", ""))
         b = m.db.get(int(body.get("id", 0)))
-        if not b or b.user_id != user.id or b.status != "active":
+        if not b or b.user_id != user.id or b.status not in ("active", "pending"):
             return web.json_response({"ok": False, "error": "Ёзилиш топилмади"})
         m.db.cancel(b.id)
         barber = m.cfg.barbers.get(b.barber_id)
@@ -103,7 +103,7 @@ def make_app(m, bot: Bot) -> web.Application:
             await bot.send_message(user.id, m.booked_text(booking), reply_markup=m.main_menu())
         except Exception:
             log.warning("Тасдиқ хабари юборилмади: %s", user.id)
-        return web.json_response({"ok": True, "my": _my(m, user.id)})
+        return web.json_response({"ok": True, "pending": booking.status == "pending", "my": _my(m, user.id)})
 
     app = web.Application()
     app.router.add_get("/", index)

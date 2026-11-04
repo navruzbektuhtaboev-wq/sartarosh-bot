@@ -44,5 +44,6 @@
     }
   ],
   "google_credentials_file": null,
-  "webapp_url": "https://navruzbektuhtaboev-wq.github.io/sartarosh-bot/webapp/"
+  "webapp_url": "https://navruzbektuhtaboev-wq.github.io/sartarosh-bot/webapp/",
+  "require_confirm": true
 }

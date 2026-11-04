@@ -169,7 +169,7 @@
 <div class="view" id="v-done">
   <div class="done">
     <div class="big">✓</div>
-    <h1>Сиз ёзилдингиз!</h1>
+    <h1 id="doneTitle">Сиз ёзилдингиз!</h1>
     <p id="doneText"></p>
     <button class="cta" id="doneHome" style="max-width:320px">Бош саҳифа</button>
   </div>
@@ -250,7 +250,7 @@ function renderMine() {
   $("mineBox").style.display = mine.length ? "block" : "none";
   const box = $("mineList"); box.innerHTML = "";
   mine.forEach(x => {
-    const r = el("div", "mine", `<div><div class="t" style="font-weight:600">${esc(x.when)}</div><div class="s" style="color:var(--hint);font-size:14px">${esc(x.barber)}</div></div><button>Бекор қилиш</button>`);
+    const r = el("div", "mine", `<div><div class="t" style="font-weight:600">${esc(x.when)}</div><div class="s" style="color:var(--hint);font-size:14px">${esc(x.barber)}${x.pending ? ' · <span style="color:var(--gold2)">⏳ тасдиқ кутилмоқда</span>' : ' · <span style="color:#4fbf74">✓ тасдиқланган</span>'}</div></div><button>Бекор қилиш</button>`);
     r.querySelector("button").onclick = async () => {
       const ok = await new Promise(res => tg && tg.showConfirm ? tg.showConfirm("Ёзилишни бекор қиласизми?", res) : res(confirm("Ёзилишни бекор қиласизми?")));
       if (!ok) return;
@@ -374,7 +374,9 @@ async function submit() {
     if (res.ok) {
       mine = res.my || mine;
       const dt = new Date(c.d + "T00:00:00");
-      $("doneText").textContent = `${data.b[state.b][1]} · ${WD[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]}, соат ${state.t}. Вақтидан олдин ботда эслатаман.`;
+      const when = `${data.b[state.b][1]} · ${WD[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]}, соат ${state.t}.`;
+      $("doneTitle").textContent = res.pending ? "Сўров юборилди!" : "Сиз ёзилдингиз!";
+      $("doneText").textContent = res.pending ? when + " Уста қабул қилгач, ботга хабар келади." : when + " Вақтидан олдин ботда эслатаман.";
       tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
       const r2 = await api("api/init"); data = r2.data; mine = r2.my; renderHome();
       state.t = null;

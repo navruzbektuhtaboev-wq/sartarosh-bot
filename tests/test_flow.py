@@ -96,6 +96,7 @@ async def run():
     raw["admin_ids"] = [999]
     raw["work_start"], raw["work_end"] = "00:00", "23:59"
     raw["days_off"] = []
+    raw["require_confirm"] = False
     raw["services"] = [
         {"id": "s1", "name": "Соч олиш", "price": 50000, "minutes": 30},
         {"id": "s3", "name": "Соч + соқол", "price": 70000, "minutes": 60},
@@ -269,6 +270,30 @@ async def run():
     await feed(upd_cb("ustaok:b3:500"))
     assert m.cfg.barbers["b3"].telegram_id == 500
     assert [b for b in json.load(open(cfgpath, encoding="utf-8"))["barbers"] if b["id"] == "b3"][0]["telegram_id"] == 500
+
+    # Уста тасдиғи: сўров «pending», уста қабул қилади ёки рад этади
+    m.cfg.require_confirm = True
+    sent.clear()
+    t1 = (m.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+    p1 = await m.place_booking(bot, 900, "Мижоз", "+998901234567", "b4", "s1", t1)
+    assert p1.status == "pending" and f"acc:{p1.id}" in last_kb()
+    assert t1 not in m.free_slots(m.cfg, t1.date(), 30, await m.barber_busy("b4", t1.date()), m.now()), "кутилаётган вақт банд"
+    USER["id"] = 777  # бегона
+    await feed(upd_cb(f"acc:{p1.id}"))
+    assert m.db.get(p1.id).status == "pending"
+    USER["id"] = 42  # админ
+    await feed(upd_cb(f"acc:{p1.id}"))
+    assert m.db.get(p1.id).status == "active"
+    assert any(isinstance(x, SendMessage) and x.chat_id == 900 and "тасдиқлади" in x.text for x in sent)
+    p2 = await m.place_booking(bot, 901, "Мижоз2", "+998901234568", "b4", "s1", t1 + timedelta(hours=1))
+    USER["id"] = 500  # b3 устаси, b4 эмас — лекин гуруҳдан эмас, рухсат йўқ
+    await feed(upd_cb(f"rej:{p2.id}"))
+    assert m.db.get(p2.id).status == "pending"
+    USER["id"] = 42
+    await feed(upd_cb(f"rej:{p2.id}"))
+    assert m.db.get(p2.id).status == "rejected"
+    assert any(isinstance(x, SendMessage) and x.chat_id == 901 and "банд" in x.text for x in sent)
+    assert t1 + timedelta(hours=1) in m.free_slots(m.cfg, t1.date(), 30, await m.barber_busy("b4", t1.date()), m.now()), "рад этилгач бўшайди"
 
     shutil.rmtree(tmp)
     print("OK — барча синовлар ўтди")

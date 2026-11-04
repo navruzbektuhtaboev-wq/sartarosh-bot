@@ -66,25 +66,25 @@ class DB:
 
     def busy_intervals(self, barber_id: str, day_start: datetime, day_end: datetime):
         rows = self.conn.execute(
-            "SELECT start, end FROM bookings WHERE barber_id=? AND status='active' "
+            "SELECT start, end FROM bookings WHERE barber_id=? AND status IN ('active','pending') "
             "AND start < ? AND end > ?",
             (barber_id, day_end.isoformat(), day_start.isoformat()),
         ).fetchall()
         return [(datetime.fromisoformat(r["start"]), datetime.fromisoformat(r["end"])) for r in rows]
 
-    def create(self, user_id, client_name, phone, barber_id, service_id, start, end) -> Booking | None:
+    def create(self, user_id, client_name, phone, barber_id, service_id, start, end, status="active") -> Booking | None:
         """Вақт банд бўлса None қайтаради (икки мижоз бир вақтда босса ҳам)."""
         with self.lock:
             clash = self.conn.execute(
-                "SELECT 1 FROM bookings WHERE barber_id=? AND status='active' AND start < ? AND end > ?",
+                "SELECT 1 FROM bookings WHERE barber_id=? AND status IN ('active','pending') AND start < ? AND end > ?",
                 (barber_id, end.isoformat(), start.isoformat()),
             ).fetchone()
             if clash:
                 return None
             cur = self.conn.execute(
-                "INSERT INTO bookings (user_id, client_name, phone, barber_id, service_id, start, end) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (user_id, client_name, phone, barber_id, service_id, start.isoformat(), end.isoformat()),
+                "INSERT INTO bookings (user_id, client_name, phone, barber_id, service_id, start, end, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_id, client_name, phone, barber_id, service_id, start.isoformat(), end.isoformat(), status),
             )
             self.conn.commit()
             return self.get(cur.lastrowid)
@@ -95,14 +95,14 @@ class DB:
 
     def user_upcoming(self, user_id: int, now: datetime) -> list[Booking]:
         rows = self.conn.execute(
-            "SELECT * FROM bookings WHERE user_id=? AND status='active' AND start >= ? ORDER BY start",
+            "SELECT * FROM bookings WHERE user_id=? AND status IN ('active','pending') AND start >= ? ORDER BY start",
             (user_id, now.isoformat()),
         ).fetchall()
         return [_row(r) for r in rows]
 
     def between(self, start: datetime, end: datetime) -> list[Booking]:
         rows = self.conn.execute(
-            "SELECT * FROM bookings WHERE status='active' AND start >= ? AND start < ? ORDER BY barber_id, start",
+            "SELECT * FROM bookings WHERE status IN ('active','pending') AND start >= ? AND start < ? ORDER BY barber_id, start",
             (start.isoformat(), end.isoformat()),
         ).fetchall()
         return [_row(r) for r in rows]
@@ -116,6 +116,10 @@ class DB:
 
     def mark_reminded(self, booking_id: int):
         self.conn.execute("UPDATE bookings SET reminded=1 WHERE id=?", (booking_id,))
+        self.conn.commit()
+
+    def set_status(self, booking_id: int, status: str):
+        self.conn.execute("UPDATE bookings SET status=? WHERE id=?", (status, booking_id))
         self.conn.commit()
 
     def cancel(self, booking_id: int):

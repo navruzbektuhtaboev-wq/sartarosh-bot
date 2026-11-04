@@ -102,6 +102,7 @@ def fmt_booking(b: Booking) -> str:
         f"📅 {fmt_day(t.date())}, {t:%H:%M}\n"
         f"💇 Сартарош: {barber.name if barber else b.barber_id}"
         + service_line(service)
+        + ("\n⏳ Уста тасдиғи кутилмоқда" if b.status == "pending" else "")
     )
 
 
@@ -129,7 +130,7 @@ def chunks(items, n):
     return [items[i:i + n] for i in range(0, len(items), n)]
 
 
-async def notify_staff(bot: Bot, barber_id: str, text: str):
+async def notify_staff(bot: Bot, barber_id: str, text: str, markup=None):
     targets = set(cfg.admin_ids)
     if cfg.group_chat_id:
         targets.add(int(cfg.group_chat_id))
@@ -138,7 +139,7 @@ async def notify_staff(bot: Bot, barber_id: str, text: str):
         targets.add(int(barber.telegram_id))
     for chat_id in targets:
         try:
-            await bot.send_message(chat_id, text)
+            await bot.send_message(chat_id, text, reply_markup=markup)
         except Exception:
             log.warning("Хабар юборилмади: %s", chat_id)
 
@@ -506,6 +507,11 @@ async def confirm(cb: CallbackQuery, state: FSMContext, bot: Bot):
 
 
 def booked_text(booking: Booking) -> str:
+    if booking.status == "pending":
+        return (
+            "⏳ <b>Сўровингиз устага юборилди!</b>\n\n" + fmt_booking(booking) +
+            "\n\nУста қабул қилгач, шу ерга хабар келади."
+        )
     return (
         "✅ <b>Сиз ёзилдингиз!</b>\n\n" + fmt_booking(booking) +
         f"\n\n📍 {cfg.address}\nВақтидан {fmt_minutes(cfg.reminder_minutes)} олдин эслатаман."
@@ -525,7 +531,8 @@ async def place_booking(bot: Bot, user_id: int, full_name: str | None, phone: st
         return None
 
     raw_name = full_name or "Мижоз"
-    booking = db.create(user_id, raw_name, phone, barber.id, service.id, start, end)
+    status = "pending" if cfg.require_confirm else "active"
+    booking = db.create(user_id, raw_name, phone, barber.id, service.id, start, end, status)
     if not booking:
         return None
 
@@ -541,13 +548,64 @@ async def place_booking(bot: Bot, user_id: int, full_name: str | None, phone: st
 
     if resched_id:
         old = db.get(resched_id)
-        if old and old.status == "active" and old.user_id == user_id:
+        if old and old.status in ("active", "pending") and old.user_id == user_id:
             db.cancel(old.id)
             await cal.remove(cfg.barbers[old.barber_id].calendar_id, old.calendar_event_id)
 
     head = "🔁 Ёзилиш вақти ўзгартирилди" if resched_id else "🆕 Янги ёзилиш"
-    await notify_staff(bot, barber.id, f"{head} №{booking.id}\n\n{fmt_booking(booking)}\n👤 {html.escape(raw_name)}\n📱 {phone}")
+    markup = None
+    if status == "pending":
+        head += " — тасдиқланг"
+        markup = ikb([[("✅ Қабул қилдим", f"acc:{booking.id}"), ("❌ Банд", f"rej:{booking.id}")]])
+    await notify_staff(bot, barber.id, f"{head} №{booking.id}\n\n{fmt_booking(booking)}\n👤 {html.escape(raw_name)}\n📱 {phone}", markup)
     return booking
+
+
+def can_decide(cb: CallbackQuery, b: Booking) -> bool:
+    """Админ, ўша уста ёки усталар гуруҳидаги ҳар ким тасдиқлай олади."""
+    if cb.from_user.id in cfg.admin_ids:
+        return True
+    if cfg.group_chat_id and cb.message and cb.message.chat.id == cfg.group_chat_id:
+        return True
+    barber = cfg.barbers.get(b.barber_id)
+    return bool(barber and barber.telegram_id and int(barber.telegram_id) == cb.from_user.id)
+
+
+@router.callback_query(F.data.startswith("acc:") | F.data.startswith("rej:"))
+async def decide(cb: CallbackQuery, bot: Bot):
+    action, bid = cb.data.split(":")
+    b = db.get(int(bid))
+    if not b:
+        await cb.answer("Топилмади", show_alert=True)
+        return
+    if not can_decide(cb, b):
+        await cb.answer("Бу ёзилишни фақат уста ёки админ тасдиқлайди", show_alert=True)
+        return
+    who = html.escape(cb.from_user.full_name or "")
+    if b.status != "pending":
+        states = {"active": "аллақачон қабул қилинган", "rejected": "аллақачон рад этилган", "cancelled": "мижоз бекор қилган"}
+        await cb.answer(f"Бу ёзилиш {states.get(b.status, b.status)}", show_alert=True)
+        await cb.message.edit_reply_markup(reply_markup=None)
+        return
+    if action == "acc":
+        db.set_status(b.id, "active")
+        b = db.get(b.id)
+        await cb.message.edit_text(cb.message.html_text + f"\n\n✅ <b>Қабул қилинди</b> ({who})")
+        client_text = "✅ <b>Уста ёзилишингизни тасдиқлади!</b>\n\n" + fmt_booking(b) + f"\n\n📍 {cfg.address}\nВақтидан {fmt_minutes(cfg.reminder_minutes)} олдин эслатаман."
+        client_kb = None
+    else:
+        db.set_status(b.id, "rejected")
+        barber = cfg.barbers.get(b.barber_id)
+        await cal.remove(barber.calendar_id if barber else None, b.calendar_event_id)
+        await cb.message.edit_text(cb.message.html_text + f"\n\n❌ <b>Рад этилди</b> ({who})")
+        client_text = ("😔 Афсуски, уста бу вақтда банд экан:\n\n" + fmt_booking(b).replace("\n⏳ Уста тасдиғи кутилмоқда", "")
+                       + "\n\nИлтимос, бошқа вақт ёки бошқа устани танланг.")
+        client_kb = main_menu()
+    await cb.answer()
+    try:
+        await bot.send_message(b.user_id, client_text, reply_markup=client_kb)
+    except Exception:
+        log.warning("Мижозга юборилмади: %s", b.user_id)
 
 
 @router.callback_query(F.data.startswith("back:"))
@@ -592,7 +650,7 @@ async def cancel_keep(cb: CallbackQuery):
 @router.callback_query(F.data.startswith("cancelok:"))
 async def cancel_ok(cb: CallbackQuery, bot: Bot):
     b = db.get(int(cb.data.split(":")[1]))
-    if not b or b.user_id != cb.from_user.id or b.status != "active":
+    if not b or b.user_id != cb.from_user.id or b.status not in ("active", "pending"):
         await cb.answer("Ёзилиш топилмади", show_alert=True)
         return
     db.cancel(b.id)
@@ -605,7 +663,7 @@ async def cancel_ok(cb: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("resch:"))
 async def reschedule(cb: CallbackQuery, state: FSMContext):
     b = db.get(int(cb.data.split(":")[1]))
-    if not b or b.user_id != cb.from_user.id or b.status != "active":
+    if not b or b.user_id != cb.from_user.id or b.status not in ("active", "pending"):
         await cb.answer("Ёзилиш топилмади", show_alert=True)
         return
     await state.clear()
